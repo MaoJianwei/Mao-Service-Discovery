@@ -61,6 +61,8 @@ var (
 	influxdbOrgBucket string
 	influxdbToken string
 
+	disable_gateway_module bool
+
 	envTempMonitor bool
 	envTempPersistent bool
 )
@@ -134,7 +136,8 @@ var serverCmd = &cobra.Command{
 		//return
 		branch.RunServer(&report_server_addr, report_server_port, &web_server_addr, web_server_port,
 			influxdbUrl, influxdbToken, influxdbOrgBucket,
-			cli_dump_interval, refresh_interval, minLogLevel, silent, ROOT_VERSION)
+			cli_dump_interval, refresh_interval, minLogLevel, silent,
+			disable_gateway_module, ROOT_VERSION)
 	},
 }
 
@@ -194,6 +197,8 @@ func init() {
 	serverCmd.Flags().String("influxdb_url","","URL for connecting to Influxdb. (e.g. https://<domain-or-ip>:<port>) (Optional)")
 	serverCmd.Flags().String("influxdb_org_bucket","","Same name for Org and Bucket. (Optional)")
 	serverCmd.Flags().String("influxdb_token","","Token string obtained from Influxdb. (Optional)")
+
+	serverCmd.Flags().Bool("disable_gateway_module",false,"Disable all Gateway modules. (Optional) (default: false)")
 
 
 	generalClientCmd.Flags().Uint32("report_interval", 1000, "The interval to collect data and report to server, in milliseconds.")
@@ -320,6 +325,11 @@ func readServerArgs(cmd *cobra.Command) error {
 		return err
 	}
 
+	disable_gateway_module, err = cmd.Flags().GetBool("disable_gateway_module")
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -406,7 +416,7 @@ func main() {
 	go func() {
 	   util.MaoLog(util.INFO, "enable pprof: %v", http.ListenAndServe("0.0.0.0:39999", nil))
 	}()
-	
+
 	rootCmd.AddCommand(versionCmd, generalClientCmd, serverCmd)
 
 	if err := rootCmd.Execute(); err != nil {

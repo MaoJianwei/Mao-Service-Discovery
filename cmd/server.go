@@ -12,6 +12,7 @@ import (
 	"MaoServerDiscovery/cmd/lib/Restful"
 	"MaoServerDiscovery/cmd/lib/Soap"
 	MaoDatabase "MaoServerDiscovery/incubator/Database"
+	"MaoServerDiscovery/incubator/MaoCloudMonitor"
 	"MaoServerDiscovery/incubator/OnosTopoShow"
 	"MaoServerDiscovery/util"
 	parent "MaoServerDiscovery/util"
@@ -26,7 +27,7 @@ const (
 )
 
 //var (
-	// serviceAlive []*MaoApi.GrpcServiceNode // Mao: Deprecated, 2022.07.08.
+// serviceAlive []*MaoApi.GrpcServiceNode // Mao: Deprecated, 2022.07.08.
 //)
 
 /**
@@ -180,7 +181,7 @@ func showServerPlain(c *gin.Context) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.String(200, dump)
 }
- */
+*/
 
 func showMergeServer(c *gin.Context) {
 	c.HTML(200, "index-server.html", nil)
@@ -203,14 +204,13 @@ func showMergeServiceIP(c *gin.Context) {
 	c.JSON(200, ret)
 }
 
-
 func RunServer(
 	report_server_addr *net.IP, report_server_port uint32, web_server_addr *net.IP, web_server_port uint32,
 	influxdbUrl string, influxdbToken string, influxdbOrgBucket string,
-	cli_dump_interval uint32, refresh_interval uint32, minLogLevel util.MaoLogLevel, silent bool, version string) {
+	cli_dump_interval uint32, refresh_interval uint32, minLogLevel util.MaoLogLevel, silent bool,
+	disable_gateway_module bool, version string) {
 
 	util.InitMaoLog(minLogLevel)
-
 
 	// ====== Restful Server module - part 1/2 ======
 	restfulServer := &Restful.RestfulServerImpl{}
@@ -225,7 +225,6 @@ func RunServer(
 	restfulServer.RegisterUiPage("/Dashboard", showMergeServer)
 	// ==============================================
 
-
 	// ====== Config(YAML) module ======
 	configModule := &config.ConfigYamlModule{}
 	if !configModule.InitConfigModule(config.DEFAULT_CONFIG_FILE) {
@@ -235,15 +234,12 @@ func RunServer(
 	MaoCommon.RegisterService(MaoApi.ConfigModuleRegisterName, configModule)
 	// =================================
 
-
-
 	// ====== gRPC KA module ======
 	grpcModule := &GrpcKa.GrpcDetectModule{}
 	grpcModule.InitGrpcModule(parent.GetAddrPort(report_server_addr, report_server_port))
 
 	MaoCommon.RegisterService(MaoApi.GrpcKaModuleRegisterName, grpcModule)
 	// ============================
-
 
 	// ====== ICMP KA module ======
 	icmpDetectModule := &icmpKa.IcmpDetectModule{}
@@ -253,7 +249,6 @@ func RunServer(
 
 	MaoCommon.RegisterService(MaoApi.IcmpKaModuleRegisterName, icmpDetectModule)
 	// ============================
-
 
 	// ====== SMTP Email module ======
 	smtpEmailModule := &Email.SmtpEmailModule{}
@@ -280,7 +275,6 @@ func RunServer(
 	//MaoCommon.RegisterService(MaoApi.WechatModuleRegisterName, wechatMessageModule)
 	// ============================
 
-
 	// ====== Topology module ======
 	hostname, err := util.GetHostname()
 	if err != nil {
@@ -292,12 +286,16 @@ func RunServer(
 	MaoCommon.RegisterService(MaoApi.TopoModuleRegisterName, onosTopoModule)
 	// =================================
 
+	// ====== MaoCloud Monitor Wrapper module ======
+	maoCloudMonitorWrapper := &MaoCloudMonitor.MaoCloudMonitorWrapper{}
+	maoCloudMonitorWrapper.InitMaoCloudMonitorWrapper()
+
+	MaoCommon.RegisterService(MaoApi.MaoCloudModuleRegisterName, maoCloudMonitorWrapper)
+	// =================================
 
 	// ====== Restful Server module - part 2/2 ======
 	restfulServer.StartRestfulServerDaemon(parent.GetAddrPort(web_server_addr, web_server_port))
 	// ==============================================
-
-
 
 	// ====== Aux Data Processor module ======
 	InfluxDB.ConfigInfluxdbUtils(influxdbUrl, influxdbToken, influxdbOrgBucket)
@@ -313,12 +311,14 @@ func RunServer(
 	// =======================================
 
 	// ====== Gateway module ======
-	gatewayModule := &Soap.TplinkGatewayModule{}
-	if !gatewayModule.InitTplinkGatewayModule() {
-		return
-	}
+	if disable_gateway_module == false {
+		gatewayModule := &Soap.TplinkGatewayModule{}
+		if !gatewayModule.InitTplinkGatewayModule() {
+			return
+		}
 
-	MaoCommon.RegisterService(MaoApi.GatewayModuleRegisterName, gatewayModule)
+		MaoCommon.RegisterService(MaoApi.GatewayModuleRegisterName, gatewayModule)
+	}
 	// ============================
 
 	if !silent {
