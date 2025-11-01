@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["windows-latest", "ubuntu-latest", "ubuntu-22.04", "ubuntu-20.04", "macos-latest"]
+        os: ["windows-latest", "ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04", "macos-latest"]
         node-version: [16.x, 18.x]
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
     runs-on: ${{ matrix.os }}
