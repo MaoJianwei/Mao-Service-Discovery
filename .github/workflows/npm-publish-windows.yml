@@ -77,9 +77,14 @@ jobs:
       - name: Refresh version for NPM Package
         working-directory: ./.npm-release-binary-windows/
         run: npm version prerelease --preid windows-rc1-${env:GITHUB_REF_NAME}-${env:GITHUB_SHA}
-        
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
       - name: Publish NPM Package
         working-directory: ./.npm-release-binary-windows/
-        run: npm publish
+        run: npm publish --tag windows-rc1-${env:GITHUB_REF_NAME}-${env:GITHUB_SHA}
 
 # commit-`date "+%Y-%m-%d-%H-%M-%S"`

@@ -9,6 +9,7 @@ on:
 
 permissions:
   id-token: write  # Required for OIDC
+  contents: read
 
 jobs:
   publish-npm:
@@ -44,11 +45,14 @@ jobs:
       - name: Refresh version for NPM Package
         working-directory: ./.npm-release-binary/
         run: npm version prerelease --preid linux-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
-        
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
       - name: Publish NPM Package
         working-directory: ./.npm-release-binary/
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
+        run: npm publish --tag linux-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
 
 # commit-`date "+%Y-%m-%d-%H-%M-%S"`

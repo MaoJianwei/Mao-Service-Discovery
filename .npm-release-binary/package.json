@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MaoJianwei/Mao_Service_Discovery.git"
+    "url": "https://github.com/MaoJianwei/Mao-Service-Discovery"
   },
   "keywords": [
     "utils",
@@ -28,7 +28,7 @@
   "author": "Jianwei Mao",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/MaoJianwei/Mao_Service_Discovery/issues"
+    "url": "https://github.com/MaoJianwei/Mao-Service-Discovery/issues"
   },
-  "homepage": "https://github.com/MaoJianwei/Mao_Service_Discovery#readme"
+  "homepage": "https://github.com/MaoJianwei/Mao-Service-Discovery"
 }
