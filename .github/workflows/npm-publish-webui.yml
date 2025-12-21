@@ -1,0 +1,38 @@
+# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
+# For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
+
+name: Node.js Package Publish (Commit) (WebUI)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "*" ]
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          registry-url: https://registry.npmjs.org/
+
+      - run: ./build_webui.sh
+        
+      - run: cp -vrf ./resource/ ./.npm-release-binary/
+      
+      - run: git config --global user.email "maojianwei2016@126.com"
+      - run: git config --global user.name "Jianwei Mao"
+      
+      - name: Refresh version for NPM Package
+        working-directory: ./.npm-release-binary/
+        run: npm version prerelease --preid webui-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
+        
+      - name: Publish NPM Package
+        working-directory: ./.npm-release-binary/
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
+
+# commit-`date "+%Y-%m-%d-%H-%M-%S"`
