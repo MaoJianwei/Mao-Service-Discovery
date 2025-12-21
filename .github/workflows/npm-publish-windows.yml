@@ -51,31 +51,31 @@ jobs:
       - run: mv ./webui/dist/css/ ./resource/static/
       - run: mv ./webui/dist/js/ ./resource/static/
 
-      - run: mv ./MaoServerDiscovery.exe ./.npm-release-binary/
-      - run: mv ./resource/ ./.npm-release-binary/
+      - run: mv ./MaoServerDiscovery.exe ./.npm-release-binary-windows/
+      - run: mv ./resource/ ./.npm-release-binary-windows/
 
       - name: dir html
-        working-directory: ./.npm-release-binary/resource/html/
+        working-directory: ./.npm-release-binary-windows/resource/html/
         run: dir
       - name: dir static
-        working-directory: ./.npm-release-binary/resource/static/
+        working-directory: ./.npm-release-binary-windows/resource/static/
         run: dir
       - name: dir css
-        working-directory: ./.npm-release-binary/resource/static/css/
+        working-directory: ./.npm-release-binary-windows/resource/static/css/
         run: dir
       - name: dir js
-        working-directory: ./.npm-release-binary/resource/static/js/
+        working-directory: ./.npm-release-binary-windows/resource/static/js/
         run: dir
         
       - run: git config --global user.email "maojianwei2016@126.com"
       - run: git config --global user.name "Jianwei Mao"
 
       - name: Refresh version for NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-windows/
         run: npm version prerelease --preid windows-rc1-${env:GITHUB_REF_NAME}-${env:GITHUB_SHA}
         
       - name: Publish NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-windows/
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}
