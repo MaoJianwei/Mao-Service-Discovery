@@ -3,6 +3,12 @@ package Config
 import (
 	"MaoServerDiscovery/cmd/lib/MaoCommon"
 	"MaoServerDiscovery/util"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"github.com/MaoJianwei/gmsm/sm3"
+	"github.com/MaoJianwei/gmsm/sm4"
 	"github.com/gin-gonic/gin"
 	yaml "gopkg.in/yaml.v3"
 	"io/ioutil"
@@ -16,6 +22,8 @@ const (
 
 	EVENT_GET = iota
 	EVENT_PUT
+	EVENT_GET_SEC
+	EVENT_PUT_SEC
 
 	MODULE_NAME = "Config-YAML-module"
 
@@ -23,8 +31,27 @@ const (
 	ERR_CODE_PATH_FORMAT       = 1
 	ERR_CODE_PATH_NOT_EXIST    = 2
 	ERR_CODE_PATH_TRANSIT_FAIL = 3
+	ERR_CODE_SEC_PATH_NOT_EXIST = 4
+	ERR_CODE_SEC_DATA_TYPE_NOT_STRING = 5
+
+	ERR_CODE_ENC_DEC_OK                = 20
+	ERR_CODE_ENC_FAIL                  = 21
+	ERR_CODE_DEC_FAIL                  = 22
+	ERR_CODE_DEC_NOT_ENC               = 23
+	ERR_CODE_DEC_IV_PARSE_FAIL         = 24
+	ERR_CODE_ENC_IV_GEN_FAIL           = 25
+	ERR_CODE_ENC_DEC_KEY_NOT_READY     = 26
+	ERR_CODE_ENC_INPUT_NOT_STRING_FAIL = 27
+
+	ENC_DEC_SUFFIX_CIPHER = "_MAO_SEC"
+	ENC_DEC_SUFFIX_IV     = "_MAO_SEC_IV"
 
 	URL_CONFIG_ALL_TEXT_SHOW = "/getAllConfigText"
+	URL_CONFIG_SET_SECKEY = "/setConfigSecKey"
+
+	CONFIG_API_KEY_SECKEY = "secKey"
+
+	CONFIG_PATH_SEC_KEY_DIGEST = "/config/secKeyDigest"
 )
 
 type ConfigYamlModule struct {
@@ -32,6 +59,10 @@ type ConfigYamlModule struct {
 	eventChannel chan *configEvent
 
 	configFilename string
+
+	secKey string // complement or truncate the key to 32-bytes length for encryption and decryption. But store the hash of the origin key.
+	secKeyDigest string
+	keyUpdateListeners []*chan int
 }
 
 //var (
@@ -42,7 +73,10 @@ type ConfigYamlModule struct {
 type configEvent struct {
 	eventType int
 	path      string
-	data      interface{}
+
+	data      interface{} // plaintext, or ciphertext updated internally
+	iv        interface{} // rewrite internally before using
+
 	result    chan eventResult
 }
 
@@ -115,6 +149,46 @@ func (C *ConfigYamlModule) PutConfig(path string, data interface{}) (success boo
 	return retBool, ret.errCode
 }
 
+func (C *ConfigYamlModule) GetSecConfig(path string) (object interface{}, errCode int) {
+	// TODO - TBD - test
+	result := make(chan eventResult, 1)
+	event := &configEvent{
+		eventType: EVENT_GET_SEC,
+		path:      path,
+		data:      nil,
+		result:    result,
+	}
+	C.eventChannel <- event
+
+	// TODO: timeout mechanism
+	ret := <-result
+
+	util.MaoLogM(util.DEBUG, MODULE_NAME, "GetSecConfig result: %v", ret)
+	return ret.result, ret.errCode
+}
+func (C *ConfigYamlModule) PutSecConfig(path string, data interface{}) (success bool, errCode int) {
+	// todo - TBD - test
+	result := make(chan eventResult, 1)
+	event := &configEvent{
+		eventType: EVENT_PUT_SEC,
+		path:      path,
+		data:      data,
+		result:    result,
+	}
+	C.eventChannel <- event
+
+	// TODO: timeout mechanism
+	ret := <-result
+	retBool := false
+	if ret.result != nil {
+		retBool = ret.result.(bool)
+	}
+
+	util.MaoLogM(util.DEBUG, MODULE_NAME, "PutSecConfig result: %v, %v", ret, retBool)
+	return retBool, ret.errCode
+}
+
+
 func (C *ConfigYamlModule) eventLoop(config map[string]interface{}) {
 	checkInterval := time.Duration(1000) * time.Millisecond
 	checkShutdownTimer := time.NewTimer(checkInterval)
@@ -180,6 +254,68 @@ func (C *ConfigYamlModule) eventLoop(config map[string]interface{}) {
 
 
 			switch event.eventType {
+			case EVENT_GET_SEC:
+				// TODO: refactor
+
+				util.MaoLogM(util.DEBUG, MODULE_NAME, "EVENT_GET, %s, %v, %v",
+					event.path, event.data, event.result)
+
+				if !ok {
+					//log.Println("out of the for, ", eventResult{
+					//	errCode: ERR_CODE_PATH_TRANSIT_FAIL,
+					//	result:  nil,
+					//}) // event.result <-
+					event.result <- eventResult{
+						errCode: ERR_CODE_PATH_TRANSIT_FAIL,
+						result:  nil,
+					}
+					util.MaoLogM(util.WARN, MODULE_NAME, "Fail to transit the specific config path.")
+				} else {
+					cipherPath := fmt.Sprintf("%s%s", paths[len(paths)-1], ENC_DEC_SUFFIX_CIPHER)
+					ivPath := fmt.Sprintf("%s%s", paths[len(paths)-1], ENC_DEC_SUFFIX_IV)
+					errCode := ERR_CODE_SUCCESS
+
+					ciphertext, okCiphertext := transitConfig[cipherPath]
+					ivBase64, okIV := transitConfig[ivPath]
+					if !okCiphertext || !okIV {
+						errCode = ERR_CODE_SEC_PATH_NOT_EXIST
+						event.result <- eventResult{
+							errCode: errCode,
+							result:  nil,
+						}
+						util.MaoLogM(util.WARN, MODULE_NAME, "Fail to decrypt the config: %d", errCode)
+						continue
+					}
+
+					ciphertextStr, okCiphertextStr := ciphertext.(string)
+					ivBase64Str, okIvBase64Str := ivBase64.(string)
+					if !okCiphertextStr || !okIvBase64Str {
+						errCode = ERR_CODE_SEC_DATA_TYPE_NOT_STRING
+						event.result <- eventResult{
+							errCode: errCode,
+							result:  nil,
+						}
+						util.MaoLogM(util.WARN, MODULE_NAME, "Fail to decrypt the config: %d", errCode)
+						continue
+					}
+
+					plaintext, errCode, err := C.decryptConfig(ciphertextStr, ivBase64Str)
+					if err != nil {
+						event.result <- eventResult{
+							errCode: errCode,
+							result:  nil,
+						}
+						util.MaoLogM(util.WARN, MODULE_NAME, "Fail to decrypt the config: %d, %s", errCode, err.Error())
+						continue
+					}
+
+					event.result <- eventResult{
+						errCode: ERR_CODE_SUCCESS,
+						result: plaintext,
+					}
+					util.MaoLogM(util.DEBUG, MODULE_NAME, "Get operation: [SEC-INFO]")
+				}
+
 			case EVENT_GET:
 				util.MaoLogM(util.DEBUG, MODULE_NAME, "EVENT_GET, %s, %v, %v",
 					event.path, event.data, event.result)
@@ -196,11 +332,19 @@ func (C *ConfigYamlModule) eventLoop(config map[string]interface{}) {
 					util.MaoLogM(util.WARN, MODULE_NAME, "Fail to transit the specific config path.")
 				} else {
 					result, ok := transitConfig[paths[len(paths)-1]]
-					event.result <- eventResult{
-						errCode: ERR_CODE_SUCCESS,
-						result: result,
+					if ok {
+						event.result <- eventResult{
+							errCode: ERR_CODE_SUCCESS,
+							result: result,
+						}
+						util.MaoLogM(util.DEBUG, MODULE_NAME, "Get operation: %v, %v", result, ok)
+					} else {
+						event.result <- eventResult{
+							errCode: ERR_CODE_PATH_NOT_EXIST,
+							result: nil,
+						}
+						util.MaoLogM(util.DEBUG, MODULE_NAME, "Get operation: %v, %v", result, ok)
 					}
-					util.MaoLogM(util.DEBUG, MODULE_NAME, "Get operation: %v, %v", result, ok)
 				}
 
 				// Old logic
@@ -217,6 +361,36 @@ func (C *ConfigYamlModule) eventLoop(config map[string]interface{}) {
 				//	}
 				//}
 
+			case EVENT_PUT_SEC:
+				// TODO: refactor
+
+				if event.data != nil {
+					plaintext, okDataType := event.data.(string)
+					if !okDataType {
+						// The type of data to be encrypted must be string.
+						errCode := ERR_CODE_ENC_INPUT_NOT_STRING_FAIL
+						event.result <- eventResult{
+							errCode: errCode,
+							result:  false,
+						}
+						util.MaoLogM(util.WARN, MODULE_NAME, "Fail to encrypt the config: %d", errCode)
+						continue
+					}
+
+					cipherText, ivBase64, errCode, err := C.encryptConfig(plaintext)
+					if err != nil {
+						event.result <- eventResult{
+							errCode: errCode,
+							result:  false,
+						}
+						util.MaoLogM(util.WARN, MODULE_NAME, "Fail to encrypt the config: %d", errCode)
+						continue
+					}
+
+					event.data = cipherText
+					event.iv = ivBase64
+				}
+				fallthrough
 			case EVENT_PUT:
 				util.MaoLogM(util.DEBUG, MODULE_NAME, "EVENT_PUT, %s, %v, %v", event.path, event.data, event.result)
 
@@ -237,7 +411,14 @@ func (C *ConfigYamlModule) eventLoop(config map[string]interface{}) {
 					// todo: iterate from bottom to top, to delete empty map
 					delete(transitConfig, paths[len(paths)-1])
 				} else {
-					transitConfig[paths[len(paths)-1]] = event.data
+					if event.eventType == EVENT_PUT_SEC {
+						cipherPath := fmt.Sprintf("%s%s", paths[len(paths)-1], ENC_DEC_SUFFIX_CIPHER)
+						ivPath := fmt.Sprintf("%s%s", paths[len(paths)-1], ENC_DEC_SUFFIX_IV)
+						transitConfig[cipherPath] = event.data
+						transitConfig[ivPath] = event.iv
+					} else {
+						transitConfig[paths[len(paths)-1]] = event.data
+					}
 				}
 				event.result <- eventResult{
 					errCode: ERR_CODE_SUCCESS,
@@ -268,6 +449,112 @@ func (C *ConfigYamlModule) eventLoop(config map[string]interface{}) {
 	}
 }
 
+
+
+func (C *ConfigYamlModule) isKeyReady() bool {
+	return C.secKey != ""
+}
+func (C *ConfigYamlModule) generateKeyDigest(key string) string {
+	digest := sm3.Sm3Sum([]byte(key))
+	keyBase64 := base64.StdEncoding.EncodeToString(digest) // convert iv to iv_base64.
+	return keyBase64
+}
+
+
+func (C *ConfigYamlModule) generateIV() ([]byte, error) {
+	// TODO: debug
+
+	iv := make([]byte, 12)
+	// 从加密安全的随机源读取数据。使用crypto/rand包，它生成的随机数具有加密安全性
+	_, err := rand.Read(iv)
+
+	return iv, err
+}
+
+func (C *ConfigYamlModule) getFixedSecKey() []byte {
+	keyBytes := []byte(C.secKey)
+
+	result := make([]byte, 16)
+	for i := 0; i < 16; i += 2 {
+		result[i] = '\x08'
+		result[i+1] = '\x98'
+	}
+
+	copyLen := len(keyBytes)
+	if copyLen > 16 {
+		copyLen = 16
+	}
+
+	copy(result[:copyLen], keyBytes[:copyLen])
+
+	return result
+}
+
+// Return cipherTextBase64, iv_base64, err_code, error
+func (C *ConfigYamlModule) encryptConfig(plainText string) (string, string, int, error) {
+	// TODO: debug
+
+	if !C.isKeyReady() {
+		return "", "", ERR_CODE_ENC_DEC_KEY_NOT_READY, errors.New("key not ready")
+	}
+
+	iv, err := C.generateIV()
+	if err != nil {
+		return "", "", ERR_CODE_ENC_IV_GEN_FAIL, err
+	}
+
+	gcmMsg, _, err := sm4.Sm4GCM(C.getFixedSecKey(), iv, []byte(plainText), nil, true) // todo - --- TO check nil A
+	if err != nil {
+		return "", "", ERR_CODE_ENC_FAIL, err
+	}
+
+	ivBase64 := base64.StdEncoding.EncodeToString(iv) // convert iv to iv_base64.
+	gcmMsgBase64 := base64.StdEncoding.EncodeToString(gcmMsg) // convert iv to iv_base64.
+
+
+	return gcmMsgBase64, ivBase64, ERR_CODE_ENC_DEC_OK, nil
+}
+
+// Return plaintext, err_code, error
+func (C *ConfigYamlModule) decryptConfig(cipherTextBase64 string, ivBase64 string) (string, int, error) {
+	// TODO: debug
+
+	if !C.isKeyReady() {
+		return "", ERR_CODE_ENC_DEC_KEY_NOT_READY, errors.New("key not ready")
+	}
+
+	iv, err := base64.StdEncoding.DecodeString(ivBase64) // convert iv_base64 to iv.
+	if err != nil {
+		return "", ERR_CODE_DEC_IV_PARSE_FAIL, err
+	}
+
+	cipherText, err := base64.StdEncoding.DecodeString(cipherTextBase64) // convert iv_base64 to iv.
+	if err != nil {
+		return "", ERR_CODE_DEC_IV_PARSE_FAIL, err
+	}
+
+	gcmDec, _, err := sm4.Sm4GCM(C.getFixedSecKey(), iv, cipherText, nil, false) // todo - --- TO check nil A
+	if err != nil {
+		return "", ERR_CODE_DEC_FAIL, err
+	}
+
+	return string(gcmDec), ERR_CODE_ENC_DEC_OK, nil
+}
+
+
+func (C *ConfigYamlModule) RegisterKeyUpdateListener(listener *chan int) {
+	// TODO: to check parallel access problem
+	C.keyUpdateListeners = append(C.keyUpdateListeners, listener)
+}
+func (C *ConfigYamlModule) publishKeyUpdate() {
+	for _, listener := range C.keyUpdateListeners {
+		*listener <- 0
+	}
+}
+
+
+
+
 func (C *ConfigYamlModule) RequireShutdown() {
 	C.needShutdown = true
 }
@@ -285,6 +572,7 @@ func (C *ConfigYamlModule) configRestControlInterface() {
 	}
 
 	restfulServer.RegisterGetApi(URL_CONFIG_ALL_TEXT_SHOW, C.showAllConfigText)
+	restfulServer.RegisterPostApi(URL_CONFIG_SET_SECKEY, C.setSecKey)
 }
 
 func (C *ConfigYamlModule) showAllConfigText(c *gin.Context) {
@@ -296,13 +584,47 @@ func (C *ConfigYamlModule) showAllConfigText(c *gin.Context) {
 	}
 }
 
+
+func (C *ConfigYamlModule) setSecKey(c *gin.Context) {
+	secKey, ok := c.GetPostForm(CONFIG_API_KEY_SECKEY)
+	if !ok {
+		c.String(400, "Not contained a sec key")
+		return
+	}
+
+	if C.secKeyDigest != "" {
+		digest := C.generateKeyDigest(secKey)
+		if digest != C.secKeyDigest {
+			c.String(400, "sec key is not matched")
+			return
+		}
+		util.MaoLogM(util.INFO, MODULE_NAME, "Succeed to unlock the sec key")
+	} else {
+		util.MaoLogM(util.INFO, MODULE_NAME, "Setting a new sec key")
+	}
+
+	C.secKey = secKey
+	C.secKeyDigest = C.generateKeyDigest(secKey)
+
+	// write C.secKeyDigest to file
+	C.PutConfig(CONFIG_PATH_SEC_KEY_DIGEST, C.secKeyDigest)
+
+	C.publishKeyUpdate()
+}
+
+
 func (C *ConfigYamlModule) InitConfigModule(configFilename string) bool {
 	C.configFilename = configFilename
 	C.needShutdown = false
 
 	// support custom size for the channel.
+
 	if C.eventChannel == nil  {
 		C.eventChannel = make(chan *configEvent, 100)
+	}
+
+	if C.keyUpdateListeners == nil {
+		C.keyUpdateListeners = make([]*chan int, 0)
 	}
 
 
@@ -324,5 +646,18 @@ func (C *ConfigYamlModule) InitConfigModule(configFilename string) bool {
 	C.configRestControlInterface()
 
 	go C.eventLoop(config)
+
+
+	secKey, errCode := C.GetConfig(CONFIG_PATH_SEC_KEY_DIGEST)
+	if errCode == ERR_CODE_SUCCESS {
+		var ok bool
+		C.secKeyDigest, ok = secKey.(string)
+		if !ok {
+			util.MaoLogM(util.WARN, MODULE_NAME, "Fail, the secKeyDigest is not a string")
+		}
+	} else if errCode != ERR_CODE_PATH_TRANSIT_FAIL && errCode != ERR_CODE_PATH_NOT_EXIST {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to read secKey config, code: %d", errCode)
+	}
+
 	return true
 }

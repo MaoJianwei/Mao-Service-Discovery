@@ -16,13 +16,14 @@ import (
 const (
 	MODULE_NAME = "SMTP-Email-module"
 
+	SUBJECT_FIX_PREFIX = "MaoReport: "
+
 	URL_EMAIL_HOMEPAGE = "/configEmail"
 	URL_EMAIL_CONFIG   = "/addEmailInfo"
 	URL_EMAIL_SHOW   = "/getEmailInfo"
 
-	EMAIL_INFO_CONFIG_PATH = "/email"
-
-	SUBJECT_FIX_PREFIX = "MaoReport: "
+	EMAIL_INFO_CONFIG_PATH_ROOT     = "/email"
+	EMAIL_INFO_CONFIG_PATH_PASSWORD = "/email/password"
 
 	EMAIL_CONFIG_KEY_USERNAME = "username"
 	EMAIL_CONFIG_KEY_SERVER_ADDRPORT = "smtpServerAddrPort"
@@ -48,6 +49,8 @@ type SmtpEmailModule struct {
 	// input the message
 	sendEmailChannel chan *MaoApi.EmailMessage
 	lastSendTimestamp time.Time
+
+	secConfigChannel chan int
 
 	// same as the other module, it is expected to be global
 	//checkInterval uint32
@@ -141,6 +144,9 @@ func (s *SmtpEmailModule) sendEmailLoop() {
 				s.sendEmail(message)
 				s.lastSendTimestamp = time.Now()
 			}
+
+		case <-s.secConfigChannel:
+			s.loadEmailSecConfig()
 		case <-checkShutdownTimer.C:
 			util.MaoLogM(util.DEBUG, MODULE_NAME, "CheckShutdown, event queue len %d", len(s.sendEmailChannel))
 			if s.needShutdown {
@@ -157,8 +163,11 @@ func (s *SmtpEmailModule) sendEmailLoop() {
 
 func (s *SmtpEmailModule) InitSmtpEmailModule() bool {
 	s.sendEmailChannel = make(chan *MaoApi.EmailMessage, 1024)
+	s.secConfigChannel = make(chan int)
 	s.needShutdown = false
 
+
+	s.registerSecConfigListener()
 	s.loadEmailConfig()
 
 	go s.sendEmailLoop()
@@ -168,6 +177,38 @@ func (s *SmtpEmailModule) InitSmtpEmailModule() bool {
 	return true
 }
 
+func (s *SmtpEmailModule) registerSecConfigListener() {
+	configModule := MaoCommon.ServiceRegistryGetConfigModule()
+	if configModule == nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance")
+		return
+	}
+
+	// register config-secKey listener
+	configModule.RegisterKeyUpdateListener(&s.secConfigChannel)
+}
+func (s *SmtpEmailModule) loadEmailSecConfig() {
+	configModule := MaoCommon.ServiceRegistryGetConfigModule()
+	if configModule == nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance")
+		return
+	}
+
+	password, errCode := configModule.GetSecConfig(EMAIL_INFO_CONFIG_PATH_PASSWORD)
+	if errCode != Config.ERR_CODE_SUCCESS {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to read email config, code: %d, %v", errCode, errCode)
+		return
+	}
+
+	var ok bool
+	s.password, ok = password.(string)
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse email config - password")
+		return
+	}
+
+	util.MaoLogM(util.INFO, MODULE_NAME, "Loaded sec config")
+}
 func (s *SmtpEmailModule) loadEmailConfig() {
 	configModule := MaoCommon.ServiceRegistryGetConfigModule()
 	if configModule == nil {
@@ -175,7 +216,7 @@ func (s *SmtpEmailModule) loadEmailConfig() {
 		return
 	}
 
-	emailConfig, errCode := configModule.GetConfig(EMAIL_INFO_CONFIG_PATH)
+	emailConfig, errCode := configModule.GetConfig(EMAIL_INFO_CONFIG_PATH_ROOT)
 	if errCode != Config.ERR_CODE_SUCCESS {
 		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to read email config, code: %d, %v", errCode, errCode)
 		return
@@ -269,17 +310,17 @@ func (s *SmtpEmailModule) processEmailInfo(c *gin.Context) {
 		s.password = password
 	}
 
-	smtpServerAddrPort, ok := c.GetPostForm(EMAIL_CONFIG_KEY_SERVER_ADDRPORT)
+	smtpServerAddrPort, ok := c.GetPostForm(EMAIL_API_KEY_SERVER_ADDRPORT)
 	if ok {
 		s.smtpServerAddrPort = smtpServerAddrPort
 	}
 
-	sender, ok := c.GetPostForm(EMAIL_CONFIG_KEY_SENDER)
+	sender, ok := c.GetPostForm(EMAIL_API_KEY_SENDER)
 	if ok {
 		s.sender = sender
 	}
 
-	receiverStr, ok := c.GetPostForm(EMAIL_CONFIG_KEY_RECEIVER)
+	receiverStr, ok := c.GetPostForm(EMAIL_API_KEY_RECEIVER)
 	if ok {
 		receivers := strings.Fields(receiverStr)
 		s.receiver = receivers
@@ -296,7 +337,8 @@ func (s *SmtpEmailModule) processEmailInfo(c *gin.Context) {
 		data[EMAIL_CONFIG_KEY_RECEIVER] = s.receiver
 
 		// Attention: password can't be outputted !!!
-		configModule.PutConfig(EMAIL_INFO_CONFIG_PATH, data)
+		configModule.PutConfig(EMAIL_INFO_CONFIG_PATH_ROOT, data)
+		configModule.PutSecConfig(EMAIL_INFO_CONFIG_PATH_PASSWORD, s.password)
 	}
 
 	s.showEmailPage(c)
