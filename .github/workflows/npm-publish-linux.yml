@@ -7,6 +7,9 @@ on:
   push:
     branches: [ "*" ]
 
+permissions:
+  id-token: write  # Required for OIDC
+
 jobs:
   publish-npm:
     runs-on: ubuntu-latest
