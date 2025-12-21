@@ -8,6 +8,10 @@ on:
   push:
     branches: [ "*" ]
 
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
 jobs:
   publish-npm:
     runs-on: ubuntu-latest
@@ -20,19 +24,17 @@ jobs:
 
       - run: ./build_webui.sh
         
-      - run: cp -vrf ./resource/ ./.npm-release-binary/
+      - run: cp -vrf ./resource/ ./.npm-release-binary-webui/
       
       - run: git config --global user.email "maojianwei2016@126.com"
       - run: git config --global user.name "Jianwei Mao"
       
       - name: Refresh version for NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-webui/
         run: npm version prerelease --preid webui-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
         
       - name: Publish NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-webui/
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
 
 # commit-`date "+%Y-%m-%d-%H-%M-%S"`
