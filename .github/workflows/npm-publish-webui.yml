@@ -32,7 +32,13 @@ jobs:
       - name: Refresh version for NPM Package
         working-directory: ./.npm-release-binary-webui/
         run: npm version prerelease --preid webui-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
-        
+
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          
       - name: Publish NPM Package
         working-directory: ./.npm-release-binary-webui/
         run: npm publish
