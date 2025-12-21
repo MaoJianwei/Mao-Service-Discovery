@@ -53,6 +53,6 @@ jobs:
 
       - name: Publish NPM Package
         working-directory: ./.npm-release-binary/
-        run: npm publish --tag linux-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
+        run: npm publish --tag latest
 
 # commit-`date "+%Y-%m-%d-%H-%M-%S"`
