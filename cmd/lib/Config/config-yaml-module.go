@@ -610,6 +610,8 @@ func (C *ConfigYamlModule) setSecKey(c *gin.Context) {
 	C.PutConfig(CONFIG_PATH_SEC_KEY_DIGEST, C.secKeyDigest)
 
 	C.publishKeyUpdate()
+
+	c.String(200, "sec key ready")
 }
 
 
