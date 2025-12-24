@@ -1,6 +1,7 @@
 package MaoDatabase
 
 import (
+	"MaoServerDiscovery/cmd/lib/Config"
 	"MaoServerDiscovery/cmd/lib/MaoCommon"
 	"MaoServerDiscovery/util"
 	"context"
@@ -41,7 +42,19 @@ const (
 	URL_MYSQL_CONFIG   = "/addMysqlInfo"
 	URL_MYSQL_SHOW   = "/getMysqlInfo"
 
-	MYSQL_INFO_CONFIG_PATH = "/mysql"
+	MYSQL_INFO_CONFIG_PATH_ROOT = "/mysql"
+	MYSQL_INFO_CONFIG_PATH_PASSWORD = "/mysql/password"
+
+	MYSQL_CONFIG_KEY_SERVER_IP_DOMAIN_NAME = "ipDomainName"
+	MYSQL_CONFIG_KEY_SERVER_PORT = "port"
+	MYSQL_CONFIG_KEY_USERNAME = "username"
+	MYSQL_CONFIG_KEY_DB_NAME  = "databaseName"
+
+	MYSQL_API_KEY_SERVER_IP_DOMAIN_NAME = "mysqlServerAddr"
+	MYSQL_API_KEY_SERVER_PORT = "mysqlServerPort"
+	MYSQL_API_KEY_USERNAME = "username"
+	MYSQL_API_KEY_PASSWORD = "password"
+	MYSQL_API_KEY_DB_NAME = "databaseName"
 )
 
 type MysqlDataPublisher struct {
@@ -55,6 +68,7 @@ type MysqlDataPublisher struct {
 	// username:password@tcp(ipDomainName:port)/databaseName
 	dataSourceName string
 
+	secConfigChannel chan int
 
 	dbConn *sql.DB
 }
@@ -128,37 +142,48 @@ func (m *MysqlDataPublisher) databaseInsertServices(dbTx *sql.Tx) error {
 	return nil
 }
 
-func (m *MysqlDataPublisher) databaseSyncLoop() {
+func (m *MysqlDataPublisher) databaseEventLoop() {
+	updateInterval := time.Duration(1000) * time.Millisecond
+	updateTimer := time.NewTimer(updateInterval)
 
 	warnLogSuppress := false
 	for {
-		time.Sleep(1 * time.Second)
-		if m.dbConn == nil {
-			continue
-		}
+		select {
+		case <-m.secConfigChannel:
+			m.loadMysqlSecConfig()
+		case <-updateTimer.C:
+			for {
+				if m.dbConn == nil {
+					break
+				}
 
-		dbTx, err := m.dbConn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
-		if err != nil {
-			if !warnLogSuppress {
-				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to create a transaction, %s", err.Error())
-				warnLogSuppress = true
+				dbTx, err := m.dbConn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+				if err != nil {
+					if !warnLogSuppress {
+						util.MaoLogM(util.WARN, MODULE_NAME, "Fail to create a transaction, %s", err.Error())
+						warnLogSuppress = true
+					}
+					break
+				}
+				warnLogSuppress = false
+
+				err = m.databaseInsertServices(dbTx)
+				if err != nil {
+					util.MaoLogM(util.WARN, MODULE_NAME, "Fail to insert data to the table: %s, %s", "MaoServiceDiscovery", err.Error())
+					dbTx.Rollback()
+					break
+				}
+
+				err = dbTx.Commit()
+				if err != nil {
+					util.MaoLogM(util.WARN, MODULE_NAME, "Fail to commit the transaction, %s", err.Error())
+					dbTx.Rollback()
+					break
+				}
+
+				break // this "for" runs just once. because we need to reset the timer.
 			}
-			continue
-		}
-		warnLogSuppress = false
-
-		err = m.databaseInsertServices(dbTx)
-		if err != nil {
-			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to insert data to the table: %s, %s", "MaoServiceDiscovery", err.Error())
-			dbTx.Rollback()
-			continue
-		}
-
-		err = dbTx.Commit()
-		if err != nil {
-			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to commit the transaction, %s", err.Error())
-			dbTx.Rollback()
-			continue
+			updateTimer.Reset(updateInterval)
 		}
 	}
 }
@@ -181,36 +206,116 @@ func (m *MysqlDataPublisher) showMysqlPage(c *gin.Context) {
 
 func (m *MysqlDataPublisher) showMysqlInfo(c *gin.Context) {
 	data := make(map[string]interface{})
-	data["username"] = m.username
-	data["mysqlServerAddr"] = m.ipDomainName
-	data["mysqlServerPort"] = m.port
-	data["databaseName"] = m.databaseName
+	data[MYSQL_API_KEY_USERNAME] = m.username
+	data[MYSQL_API_KEY_SERVER_IP_DOMAIN_NAME] = m.ipDomainName
+	data[MYSQL_API_KEY_SERVER_PORT] = m.port
+	data[MYSQL_API_KEY_DB_NAME] = m.databaseName
 
 	// Attention: password can't be outputted !!!
 	c.JSON(200, data)
 }
 
+func (m *MysqlDataPublisher) loadMysqlSecConfig() {
+	configModule := MaoCommon.ServiceRegistryGetConfigModule()
+	if configModule == nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance")
+		return
+	}
+
+	password, errCode := configModule.GetSecConfig(MYSQL_INFO_CONFIG_PATH_PASSWORD)
+	if errCode != Config.ERR_CODE_SUCCESS {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to read mysql config, code: %d, %v", errCode, errCode)
+		return
+	}
+
+	var ok bool
+	m.password, ok = password.(string)
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse mysql config - password")
+		return
+	}
+
+	util.MaoLogM(util.INFO, MODULE_NAME, "Loaded sec config")
+	if !m.reConstructMysqlConnection() {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to re-construct MYSQL connection.")
+	} else {
+		util.MaoLogM(util.INFO, MODULE_NAME, "Connected to MYSQL database.")
+	}
+}
+
+func (m *MysqlDataPublisher) loadMysqlConfig() {
+	configModule := MaoCommon.ServiceRegistryGetConfigModule()
+	if configModule == nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance")
+		return
+	}
+
+	mysqlConfig, errCode := configModule.GetConfig(MYSQL_INFO_CONFIG_PATH_ROOT)
+	if errCode != Config.ERR_CODE_SUCCESS {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to read mysql config, code: %d, %v", errCode, errCode)
+		return
+	}
+	if mysqlConfig == nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "There is no mysql config. You may need to config mysql module.")
+		return
+	}
+
+	mysqlConfigMap, ok := mysqlConfig.(map[string]interface{})
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse mysql config, can't convert to map[string]interface{}")
+		return
+	}
+
+
+
+	username, ok := mysqlConfigMap[MYSQL_CONFIG_KEY_USERNAME].(string)
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse mysql config - %s", MYSQL_CONFIG_KEY_USERNAME)
+		return
+	}
+	databaseName, ok := mysqlConfigMap[MYSQL_CONFIG_KEY_DB_NAME].(string)
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse mysql config - %s", MYSQL_CONFIG_KEY_DB_NAME)
+		return
+	}
+	mysqlServerAddr, ok := mysqlConfigMap[MYSQL_CONFIG_KEY_SERVER_IP_DOMAIN_NAME].(string)
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse mysql config - %s", MYSQL_CONFIG_KEY_SERVER_IP_DOMAIN_NAME)
+		return
+	}
+	mysqlServerPort, ok := mysqlConfigMap[MYSQL_CONFIG_KEY_SERVER_PORT].(int)
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse mysql config - %s", MYSQL_CONFIG_KEY_SERVER_PORT)
+		return
+	}
+
+	m.username = username
+	m.databaseName = databaseName
+	m.ipDomainName = mysqlServerAddr
+	m.port = uint16(mysqlServerPort)
+}
+
 func (m *MysqlDataPublisher) processMysqlInfo(c *gin.Context) {
 
-	username, ok := c.GetPostForm("username")
+	username, ok := c.GetPostForm(MYSQL_API_KEY_USERNAME)
 	if !ok {
 		c.String(200, "Fail to parse username.")
 		return
 	}
 
-	password, ok := c.GetPostForm("password")
+	password, ok := c.GetPostForm(MYSQL_API_KEY_PASSWORD)
 	if !ok {
 		c.String(200, "Fail to parse password.")
 		return
 	}
 
-	mysqlServerAddr, ok := c.GetPostForm("mysqlServerAddr")
+	mysqlServerAddr, ok := c.GetPostForm(MYSQL_API_KEY_SERVER_IP_DOMAIN_NAME)
 	if !ok {
 		c.String(200, "Fail to parse mysqlServerAddr.")
 		return
 	}
 
-	mysqlServerPort, ok := c.GetPostForm("mysqlServerPort")
+	mysqlServerPort, ok := c.GetPostForm(MYSQL_API_KEY_SERVER_PORT)
 	var port64 uint64
 	var err error
 	if ok {
@@ -222,7 +327,7 @@ func (m *MysqlDataPublisher) processMysqlInfo(c *gin.Context) {
 		}
 	}
 
-	databaseName, ok := c.GetPostForm("databaseName")
+	databaseName, ok := c.GetPostForm(MYSQL_API_KEY_DB_NAME)
 	if !ok {
 		c.String(200, "Fail to parse databaseName.")
 		return
@@ -239,19 +344,21 @@ func (m *MysqlDataPublisher) processMysqlInfo(c *gin.Context) {
 		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance, can't save mysql info")
 	} else {
 		data := make(map[string]interface{})
-		data["username"] = m.username
-		data["ipDomainName"] = m.ipDomainName
-		data["port"] = m.port
-		data["databaseName"] = m.databaseName
+		data[MYSQL_CONFIG_KEY_USERNAME] = m.username
+		data[MYSQL_CONFIG_KEY_SERVER_IP_DOMAIN_NAME] = m.ipDomainName
+		data[MYSQL_CONFIG_KEY_SERVER_PORT] = m.port
+		data[MYSQL_CONFIG_KEY_DB_NAME] = m.databaseName
 
 		// Attention: password can't be outputted !!!
-		configModule.PutConfig(MYSQL_INFO_CONFIG_PATH, data)
+		configModule.PutConfig(MYSQL_INFO_CONFIG_PATH_ROOT, data)
+		configModule.PutSecConfig(MYSQL_INFO_CONFIG_PATH_PASSWORD, m.password)
 	}
 
 	if !m.reConstructMysqlConnection() {
 		c.String(200, "Fail to re-construct MYSQL connection.")
 	} else {
 		m.showMysqlPage(c)
+		util.MaoLogM(util.INFO, MODULE_NAME, "Connected to MYSQL database.")
 	}
 }
 
@@ -279,6 +386,17 @@ func (m * MysqlDataPublisher) reConstructMysqlConnection() bool {
 	return m.initDatabaseTable()
 }
 
+func (m *MysqlDataPublisher) registerSecConfigListener() {
+	configModule := MaoCommon.ServiceRegistryGetConfigModule()
+	if configModule == nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance")
+		return
+	}
+
+	// register config-secKey listener
+	configModule.RegisterKeyUpdateListener(&m.secConfigChannel)
+}
+
 func (m *MysqlDataPublisher) InitMysqlDataPublisher() bool {
 
 	//todo: read MYSQL config from config file.
@@ -290,7 +408,11 @@ func (m *MysqlDataPublisher) InitMysqlDataPublisher() bool {
 
 	m.reConstructMysqlConnection()
 
-	go m.databaseSyncLoop()
+	m.secConfigChannel = make(chan int)
+	m.registerSecConfigListener()
+	m.loadMysqlConfig()
+
+	go m.databaseEventLoop()
 
 	m.configRestControlInterface()
 
