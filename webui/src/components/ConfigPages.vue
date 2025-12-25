@@ -6,11 +6,12 @@
     <!--      <el-tab-pane label="拓扑接口配置" name="config-topo"></el-tab-pane>-->
     <!--    </el-tabs>-->
     <el-menu
-        default-active="/config/email"
+        default-active="/config/config"
         mode="horizontal"
         router>
       <!--        @select="handleSelect"-->
 
+      <el-menu-item index="/config/config">配置中心</el-menu-item>
       <el-menu-item index="/config/email">邮件通知配置</el-menu-item>
       <el-menu-item index="/config/icmp">ICMP检测配置</el-menu-item>
       <el-menu-item index="/config/grpc">gRPC服务管理</el-menu-item>

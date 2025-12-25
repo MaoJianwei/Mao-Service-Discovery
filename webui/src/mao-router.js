@@ -11,6 +11,7 @@ import DeviceInfo from "@/components/DeviceInfo.vue";
 import ONOS from "@/components/ONOS";
 import ApiListOldApi from "@/components/ApiListOldApi.vue"
 import ConfigGrpc from "@/components/config/ConfigGrpc.vue";
+import ConfigCenter from "@/components/config/ConfigCenter.vue";
 
 // Vue.use(VueRouter)
 
@@ -32,7 +33,13 @@ export default createRouter({
                     {
                         path: '',
                         components: {
-                            maoConfig: ConfigEmail
+                            maoConfig: ConfigCenter
+                        }
+                    },
+                    {
+                        path: 'config',
+                        components: {
+                            maoConfig: ConfigCenter
                         }
                     },
                     {
