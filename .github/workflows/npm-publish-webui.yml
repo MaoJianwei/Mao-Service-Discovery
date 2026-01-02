@@ -25,6 +25,7 @@ jobs:
       - run: ./build_webui.sh
         
       - run: cp -vrf ./resource/ ./.npm-release-binary-webui/
+      - run: zip -r resource.zip ./resource/
       
       - run: git config --global user.email "maojianwei2016@126.com"
       - run: git config --global user.name "Jianwei Mao"
