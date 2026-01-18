@@ -499,7 +499,7 @@ func (m *IcmpDetectModule) InitIcmpModule() bool {
 		for _, s := range services {
 			m.AddService(s)
 		}
-		util.MaoLogM(util.INFO, MODULE_NAME, "Services loaded from config: %s", services)
+		util.MaoLogM(util.INFO, MODULE_NAME, "Services loaded from config: %d", len(services))
 	}
 
 	// configurable parameter
