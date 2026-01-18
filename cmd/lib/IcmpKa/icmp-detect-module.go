@@ -31,6 +31,11 @@ const (
 	URL_CONFIG_DEL_SERVICE_IP  = "/delServiceIp"
 	URL_CONFIG_SHOW_SERVICE_IP = "/showServiceIP"
 
+
+
+	ICMP_API_KEY_ADDRESS = "ipv4v6"
+	ICMP_API_KEY_SERVICE_NAME = "serviceName"
+
 	PROTO_ICMP    = 1
 	PROTO_ICMP_V6 = 58
 
@@ -45,7 +50,7 @@ type IcmpDetectModule struct {
 	connV6       *icmp.PacketConn
 	serviceStore sync.Map // address_string -> Service object
 
-	AddChan chan string // need to be initiated when constructing
+	AddChan chan *MaoApi.MaoIcmpServiceIdentifier // need to be initiated when constructing
 	DelChan chan string // need to be initiated when constructing
 
 	// TODO - MAKE IT CONFIGURABLE
@@ -180,8 +185,8 @@ func (m *IcmpDetectModule) receiveProcessIcmpLoop(protoNum int, conn *icmp.Packe
 				} else {
 					emailModule.SendEmail(&MaoApi.EmailMessage{
 						Subject: "ICMP UP notification",
-						Content: fmt.Sprintf("Service: %s\r\nUP Time: %s\r\nDetail: %v\r\n",
-							service.Address, time.Now().String(), service),
+						Content: fmt.Sprintf("Service: %s - %s\r\nUP Time: %s\r\nDetail: %v\r\n",
+							service.ServiceName, service.Address, time.Now().String(), service),
 					})
 				}
 
@@ -208,9 +213,10 @@ func (m *IcmpDetectModule) controlLoop() {
 	for {
 		select {
 		case addService := <-m.AddChan:
-			if _, ok := m.serviceStore.Load(addService); !ok {
-				m.serviceStore.Store(addService, &MaoApi.MaoIcmpService{
-					Address:              addService,
+			if _, ok := m.serviceStore.Load(addService.ServiceIPv4v6); !ok {
+				m.serviceStore.Store(addService.ServiceIPv4v6, &MaoApi.MaoIcmpService{
+					Address:              addService.ServiceIPv4v6,
+					ServiceName:          addService.ServiceName,
 					Alive:                false,
 					LastSeen:             time.Unix(0, 0),
 					DetectCount:          0,
@@ -218,13 +224,13 @@ func (m *IcmpDetectModule) controlLoop() {
 					RttDuration:          0,
 					RttOutboundTimestamp: time.Time{},
 				})
-				util.MaoLogM(util.DEBUG, MODULE_NAME, "Get new service %s", addService)
-				m.addNewServiceToConfig(addService)
+				util.MaoLogM(util.DEBUG, MODULE_NAME, "Get new service %s", addService.ServiceIPv4v6)
+				m.addNewServiceToConfig(addService) // TODO: TBD,支持添加servicename
 			}
 		case delService := <-m.DelChan:
 			m.serviceStore.Delete(delService)
 			util.MaoLogM(util.DEBUG, MODULE_NAME, "Del service %s", delService)
-			m.removeOldServiceFromConfig(delService)
+			m.removeOldServiceFromConfig(delService) // todo: TBD,支持删除servicename
 
 			topoModule := MaoCommon.ServiceRegistryGetTopoModule()
 			if topoModule == nil {
@@ -250,8 +256,8 @@ func (m *IcmpDetectModule) controlLoop() {
 					} else {
 						emailModule.SendEmail(&MaoApi.EmailMessage{
 							Subject: "ICMP DOWN notification",
-							Content: fmt.Sprintf("Service: %s\r\nDOWN Time: %s\r\nDetail: %v\r\n",
-								service.Address, time.Now().String(), service),
+							Content: fmt.Sprintf("Service: %s - %s\r\nDOWN Time: %s\r\nDetail: %v\r\n",
+								service.ServiceName, service.Address, time.Now().String(), service),
 						})
 					}
 
@@ -291,8 +297,9 @@ func (m *IcmpDetectModule) refreshShowingService() {
 
 
 
-func (m *IcmpDetectModule) getServiceConfig() (serviceList []string) {
-	serviceList = make([]string, 0)
+func (m *IcmpDetectModule) getServiceConfig() (serviceList []*MaoApi.MaoIcmpServiceIdentifier) {
+	// todo: TBD: 支持读取serviceName
+
 
 	configModule := MaoCommon.ServiceRegistryGetConfigModule()
 	if configModule == nil {
@@ -306,31 +313,79 @@ func (m *IcmpDetectModule) getServiceConfig() (serviceList []string) {
 		return nil
 	}
 
-	serviceList, ok := serviceObj.([]string)
+	serviceList, ok := serviceObj.([]*MaoApi.MaoIcmpServiceIdentifier)
 	if !ok {
 		// the list is read from config file
-		serviceIntfList, ok := serviceObj.([]interface{})
+		serviceObjList, ok := serviceObj.([]interface{})
 		if !ok {
-			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceList config, []string and []interface{}")
+			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse service list config, service list is not array")
 			return nil
 		}
-		serviceList = make([]string, 0)
-		for _, s := range serviceIntfList {
-			serviceList = append(serviceList, s.(string))
+		serviceList = make([]*MaoApi.MaoIcmpServiceIdentifier, 0)
+		for _, s := range serviceObjList {
+			sMap, ok := s.(map[string]interface{})
+			if !ok {
+				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse service node config - map")
+				return nil
+			}
+
+			addressObj, ok := sMap[MaoApi.ICMP_CONFIG_KEY_ADDRESS]
+			if !ok {
+				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse service node config - address")
+				return nil
+			}
+			address, ok := addressObj.(string)
+			if !ok {
+				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse service node config - address is not a string")
+				return nil
+			}
+
+			serviceNameObj, ok := sMap[MaoApi.ICMP_CONFIG_KEY_SERVICE_NAME]
+			if !ok {
+				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse service node config - service name")
+				return nil
+			}
+			serviceName, ok := serviceNameObj.(string)
+			if !ok {
+				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse service node config - service name is not a string")
+				return nil
+			}
+
+			service := &MaoApi.MaoIcmpServiceIdentifier{
+				ServiceIPv4v6: address,
+				ServiceName:   serviceName,
+			}
+			serviceList = append(serviceList, service)
 		}
 	}
 
 	return serviceList
+
+
+	//serviceList, ok := serviceObj.([]string)
+	//if !ok {
+	//	// the list is read from config file
+	//	serviceIntfList, ok := serviceObj.([]interface{})
+	//	if !ok {
+	//		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceList config, []string and []interface{}")
+	//		return nil
+	//	}
+	//	serviceList = make([]string, 0)
+	//	for _, s := range serviceIntfList {
+	//		serviceList = append(serviceList, s.(string))
+	//	}
+	//}
+	//return serviceList
 }
 
-func (m *IcmpDetectModule) saveServiceConfig(serviceList []string) (success bool){
+func (m *IcmpDetectModule) saveServiceConfig(serviceList []*MaoApi.MaoIcmpServiceIdentifier) (success bool){
 	configModule := MaoCommon.ServiceRegistryGetConfigModule()
 	if configModule == nil {
 		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get config module instance")
 		return false
 	}
 
-	_, errCode := configModule.PutConfig(SERVICE_LIST_CONFIG_PATH, serviceList)
+	_, errCode := configModule.PutConfig(SERVICE_LIST_CONFIG_PATH, serviceList) // TODO: 是否可以存对象？
 	if errCode != Config.ERR_CODE_SUCCESS {
 		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to put current services to config, errCode: %d", errCode)
 		return false
@@ -339,7 +394,7 @@ func (m *IcmpDetectModule) saveServiceConfig(serviceList []string) (success bool
 	return true
 }
 
-func (m *IcmpDetectModule) addNewServiceToConfig(serviceAddr string) (success bool) {
+func (m *IcmpDetectModule) addNewServiceToConfig(service *MaoApi.MaoIcmpServiceIdentifier) (success bool) {
 	currentServices := m.getServiceConfig()
 	if currentServices == nil {
 		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to get current services from config")
@@ -347,12 +402,12 @@ func (m *IcmpDetectModule) addNewServiceToConfig(serviceAddr string) (success bo
 	}
 
 	for _, serviceExist := range currentServices {
-		if serviceExist == serviceAddr {
+		if serviceExist.ServiceIPv4v6 == service.ServiceIPv4v6 {
 			// Mainly for reading config during initialization phase.
 			return true
 		}
 	}
-	currentServices = append(currentServices, serviceAddr)
+	currentServices = append(currentServices, service)
 
 	return m.saveServiceConfig(currentServices)
 }
@@ -366,7 +421,7 @@ func (m *IcmpDetectModule) removeOldServiceFromConfig(serviceAddr string) (succe
 
 	// assume that: the service address appears only once in the config
 	for index, s := range currentServices {
-		if s == serviceAddr {
+		if s.ServiceIPv4v6 == serviceAddr {
 			currentServices = append(currentServices[:index], currentServices[index+1:]...)
 			m.saveServiceConfig(currentServices)
 			return true
@@ -377,7 +432,7 @@ func (m *IcmpDetectModule) removeOldServiceFromConfig(serviceAddr string) (succe
 	return false
 }
 
-func (m *IcmpDetectModule) initConfigPath() (success bool, serviceConfig []string) {
+func (m *IcmpDetectModule) initConfigPath() (success bool, serviceConfig []*MaoApi.MaoIcmpServiceIdentifier) {
 	services := m.getServiceConfig()
 	if services != nil {
 		return true, services
@@ -391,7 +446,7 @@ func (m *IcmpDetectModule) initConfigPath() (success bool, serviceConfig []strin
 		return false, nil
 	}
 
-	_, errCode := configModule.PutConfig(SERVICE_LIST_CONFIG_PATH, make([]string, 0))
+	_, errCode := configModule.PutConfig(SERVICE_LIST_CONFIG_PATH, make([]*MaoApi.MaoIcmpServiceIdentifier, 0)) // TODO-DEBUG
 	if errCode != Config.ERR_CODE_SUCCESS {
 		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to put empty string array to config, errCode: %d", errCode)
 		return false, nil
@@ -403,9 +458,9 @@ func (m *IcmpDetectModule) initConfigPath() (success bool, serviceConfig []strin
 
 
 
-func (m *IcmpDetectModule) AddService(serviceIPv4v6 string) {
-	if net.ParseIP(serviceIPv4v6) != nil {
-		m.AddChan <- serviceIPv4v6
+func (m *IcmpDetectModule) AddService(service *MaoApi.MaoIcmpServiceIdentifier) {
+	if net.ParseIP(service.ServiceIPv4v6) != nil {
+		m.AddChan <- service
 	}
 }
 
@@ -435,7 +490,7 @@ func (m *IcmpDetectModule) InitIcmpModule() bool {
 
 
 
-	m.AddChan = make(chan string, 50)
+	m.AddChan = make(chan *MaoApi.MaoIcmpServiceIdentifier, 50)
 	m.DelChan = make(chan string, 50)
 
 	if success, services := m.initConfigPath(); !success {
@@ -488,14 +543,86 @@ func (m *IcmpDetectModule) showServiceIps(c *gin.Context) {
 	c.JSON(200, m.GetServices())
 }
 
+
+func (m *IcmpDetectModule) parseService(c *gin.Context) []*MaoApi.MaoIcmpServiceIdentifier {
+	services := make([]*MaoApi.MaoIcmpServiceIdentifier, 0)
+
+	var formData map[string]interface{}
+	err := c.ShouldBindJSON(&formData)
+	if err != nil {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse form data, not a map.")
+		return services
+	}
+
+	serviceIpNameListObj, ok := formData["serviceIpName"]
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceIpNameListObj, not found.")
+		return services
+	}
+
+	serviceIpNameList, ok := serviceIpNameListObj.([]interface{})
+	if !ok {
+		util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceIpNameList, not an array.")
+		return services
+	}
+
+	for _, serviceIpNameObj := range serviceIpNameList {
+		serviceIpName, ok := serviceIpNameObj.(map[string]interface{})
+		if !ok {
+			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceIpName, not an map.")
+			return services
+		}
+
+		addressObj, ok := serviceIpName[MaoApi.ICMP_CONFIG_KEY_ADDRESS]
+		if !ok {
+			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse addressObj, not found.")
+			return make([]*MaoApi.MaoIcmpServiceIdentifier, 0) // empty array
+		}
+		address, ok := addressObj.(string)
+		if !ok {
+			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse address, not a string.")
+			return make([]*MaoApi.MaoIcmpServiceIdentifier, 0) // empty array
+		}
+
+		serviceName := ""
+		serviceNameObj, ok := serviceIpName[MaoApi.ICMP_CONFIG_KEY_SERVICE_NAME]
+		if ok {
+			serviceName, ok = serviceNameObj.(string)
+			if !ok {
+				util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceName, not a string.")
+				serviceName = "Unknown"
+			}
+			if serviceName == "" {
+				serviceName = "Unknown"
+			}
+		} else {
+			util.MaoLogM(util.WARN, MODULE_NAME, "Fail to parse serviceNameObj, not found.")
+			serviceName = "Unknown"
+		}
+
+		service := &MaoApi.MaoIcmpServiceIdentifier{
+			ServiceIPv4v6: address,
+			ServiceName:   serviceName,
+		}
+
+		services = append(services, service)
+	}
+
+	return services
+}
+
 func (m *IcmpDetectModule) processServiceIp(c *gin.Context) {
-	v4Ip, ok := c.GetPostForm("ipv4v6")
-	if ok {
-		v4IpArr := strings.Fields(v4Ip)
-		for _, s := range v4IpArr {
-			if strings.Contains(c.FullPath(), URL_CONFIG_ADD_SERVICE_IP) {
-				m.AddService(s)
-			} else {
+
+	if strings.Contains(c.FullPath(), URL_CONFIG_ADD_SERVICE_IP) {
+		serviceIpNameList := m.parseService(c)
+		for _, serviceIpName := range serviceIpNameList {
+			m.AddService(serviceIpName)
+		}
+	} else {
+		v4Ip, ok := c.GetPostForm("ipv4v6")
+		if ok {
+			v4IpArr := strings.Fields(v4Ip)
+			for _, s := range v4IpArr {
 				m.DelService(s)
 			}
 		}
