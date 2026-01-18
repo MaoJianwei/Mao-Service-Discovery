@@ -1,12 +1,35 @@
 <template>
   <div style="margin: 20px" />
 
-  <el-form :model="form" label-width="120px" label-position="top" style="max-width: 600px">
-    <el-form-item label="New Services">
-      <el-input v-model="form.ipv4v6" placeholder="one line, one receiver" type="textarea" rows="3"/>
-    </el-form-item>
+  <el-form
+      ref="formRef"
+      :model="formData"
+      :rules="formRules"
+
+      style="max-width: 100%"
+      label-width="auto"
+  >
     <el-form-item>
-      <el-button type="primary" @click="onSubmit">Add</el-button>
+      <el-button type="primary" @click="submitServices">Submit</el-button>
+      <el-button @click="addServiceLine">Add</el-button>
+    </el-form-item>
+
+    <el-form-item
+        v-for="(service, index) in formData.serviceIpName"
+        :key="service.key"
+        :label="'Service ' + (index+1)"
+    >
+      <el-form-item label="IP："  style="width: 40%" :prop="'serviceIpName.' + index + '.address'"
+                    :rules="formRules['serviceIpName.address']">
+        <el-input v-model="service.address" />
+      </el-form-item>
+
+      <el-form-item label="名称：" style="width: 40%">
+        <el-input v-model="service.serviceName" />
+      </el-form-item>
+
+      <span style="width: 2%" />
+      <el-button class="mt-2" @click.prevent="removeServiceLine(index)">Delete</el-button>
     </el-form-item>
   </el-form>
 
@@ -17,6 +40,7 @@
         <el-button size="small" type="danger" @click="handleDelete(scope.$index, scope.row)">Delete</el-button>
       </template>
     </el-table-column>
+    <el-table-column label="Service Name" prop="serviceName" />
     <el-table-column label="Device IP" prop="deviceIp" />
     <el-table-column label="Alive" prop="alive" />
     <el-table-column label="Detect Count" prop="Detect_Count" />
@@ -35,6 +59,22 @@ export default {
     return {
       maoIcmpTableData: [],
       refreshTimer: "",
+
+      formData: {
+        serviceIpName: [
+          {
+            key: Date.now(),
+            address: "",
+            serviceName: "",
+          }
+        ]
+      },
+
+      formRules: {
+        'serviceIpName.address': [{ required: true, message: 'IP can not be null', trigger: 'blur' }],
+      },
+
+
       form: {
         ipv4v6: "",
       }
@@ -50,6 +90,49 @@ export default {
   },
 
   methods: {
+
+    addServiceLine() {
+      this.formData.serviceIpName.push({
+        key: Date.now(),
+        address: "",
+        serviceName: "",
+      })
+    },
+
+    removeServiceLine(index) {
+      if (index >= 0) {
+        this.formData.serviceIpName.splice(index, 1)
+      }
+      if (this.formData.serviceIpName.length === 0) {
+        this.addServiceLine()
+      }
+    },
+
+    submitServices() {
+      this.$refs.formRef.validate((valid) => {
+        if (valid) {
+          console.log('表单验证通过，可提交数据！')
+          console.log(this.formData)
+          var vueThis = this;
+          this.$http.post("/api/addServiceIp", this.formData,
+              {
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              })
+              .then(function () { // res
+                // setTimeout(vueThis.onLoad, 500)
+                vueThis.onLoad()
+              })
+              .catch(function (err) {
+                console.log("errMao: " + err);
+              });
+        }
+      })
+    },
+
+
+
     tableCellClassName({row, column, rowIndex, columnIndex}) {
       //利用单元格的 className 的回调方法，给行列索引赋值
       row.index = rowIndex;
@@ -81,8 +164,10 @@ export default {
 
             var data = res.data;
             for (var i = 0; i < data.length; i++) {
+              console.log(data[i])
               vueThis.maoIcmpTableData.push(
                   {
+                    serviceName: data[i]["ServiceName"] != null ? data[i]["ServiceName"] : "/",
                     deviceIp: data[i]["Address"] != null ? data[i]["Address"] : data[i]["Hostname"],
                     alive: data[i]["Alive"],
                     Detect_Count: data[i]["DetectCount"] != null ? data[i]["DetectCount"] : "/",
@@ -93,23 +178,6 @@ export default {
                   }
               );
             }
-          })
-          .catch(function (err) {
-            console.log("errMao: " + err);
-          });
-    },
-
-    onSubmit() {
-      var vueThis = this;
-      this.$http.post("/api/addServiceIp", this.form,
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded;'
-            }
-          })
-          .then(function () { // res
-            // setTimeout(vueThis.onLoad, 500)
-            vueThis.onLoad()
           })
           .catch(function (err) {
             console.log("errMao: " + err);

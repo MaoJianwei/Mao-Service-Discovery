@@ -19,8 +19,9 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="Device IP" prop="deviceIp" />
-      <el-table-column label="Report IP" prop="Report_IP" />
+      <el-table-column label="Service Name" prop="serviceName" />
+<!--      <el-table-column label="Device IP" prop="deviceIp" />-->
+      <el-table-column label="Device IP / Report IP" prop="Report_IP" />
       <el-table-column label="Alive" prop="alive" />
       <el-table-column label="Detect Count" prop="Detect_Count" />
       <el-table-column label="Report Count" prop="Report_Count" />
@@ -138,8 +139,9 @@ export default {
                 vueThis.maoTableData.push(
                     {
                       attr: attrs,
-                      deviceIp: data[i]["Address"] != null ? data[i]["Address"] : data[i]["Hostname"],
-                      Report_IP: data[i]["Ips"] != null ? data[i]["Ips"].join("\n") : "/",
+                      serviceName: data[i]["ServiceName"] != null ? data[i]["ServiceName"] : (data[i]["Hostname"] != null ? data[i]["Hostname"] : "/"),
+                      // deviceIp: data[i]["Address"] != null ? data[i]["Address"] : data[i]["Hostname"],
+                      Report_IP: data[i]["Ips"] != null ? data[i]["Ips"].join("\n") : (data[i]["Address"] != null ? data[i]["Address"] : data[i]["Hostname"]),
                       alive: data[i]["Alive"],
                       Detect_Count: data[i]["DetectCount"] != null ? data[i]["DetectCount"] : "/",
                       Report_Count: data[i]["ReportCount"] != null ? data[i]["ReportCount"] : data[i]["ReportTimes"],
