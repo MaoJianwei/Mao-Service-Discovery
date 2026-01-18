@@ -14,7 +14,16 @@
         <template #default="maoDetailScope">
           <el-table :data="maoDetailScope.row.attr" :border="true">
             <el-table-column label="属性" prop="attrName" width="200px"/>
-            <el-table-column label="值" prop="attrValue"/>
+            <el-table-column label="值" prop="attrValue">
+              <template #default="maoSubDetailScope">
+                <div v-if="maoSubDetailScope.row.attrName === 'OtherData'">
+                  <el-table :data="maoSubDetailScope.row.attrValue" :border="true">
+                    <el-table-column label="属性" prop="subAttrName" width="200px"/>
+                    <el-table-column label="值" prop="subAttrValue" />
+                  </el-table>
+                </div>
+              </template>
+            </el-table-column>
           </el-table>
         </template>
       </el-table-column>
@@ -126,10 +135,24 @@ export default {
               var data = res.data;
               for (var i = 0; i < data.length; i++) {
                 var attrs = [];
+                var subAttrs = [];
                 for (let k in data[i]) {
+                  var tmp;
+                  if (k === "OtherData") {
+                    var dataObj = JSON.parse(data[i][k])
+                    for (const subKey in dataObj) {
+                      subAttrs.push({
+                        "subAttrName": subKey,
+                        "subAttrValue": dataObj[subKey],
+                      });
+                    }
+                    tmp = subAttrs
+                  } else {
+                    tmp = data[i][k];
+                  }
                   attrs.push({
                       "attrName": k,
-                      "attrValue": data[i][k],
+                      "attrValue": tmp,
                   });
                 }
                 attrs = attrs.sort((a, b) => {
