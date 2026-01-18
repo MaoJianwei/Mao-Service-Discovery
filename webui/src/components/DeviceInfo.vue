@@ -3,12 +3,13 @@
       <el-switch
           v-model="refreshSwitch"
           size="default"
-          active-text="启用刷新">
+          active-text="启用刷新"
+          @change="refreshChange">
       </el-switch>
     </el-row>
 
     <el-table :data="maoTableData" ref="maoTable" @cell-click="maoTableClick" :cell-class-name="tableCellClassName"
-              :row-class-name="tableRowClassName" empty-text="暂无数据" max-height="845px">
+              :row-class-name="tableRowClassName" @expand-change="maoTableExpand" empty-text="暂无数据" max-height="845px">
 
       <el-table-column label="" type="expand">
         <template #default="maoDetailScope">
@@ -88,7 +89,9 @@ export default {
 
   data() {
     return {
+      manualStopSwitch: false,
       refreshSwitch: true,
+
       refreshTimer: '',
 
       maoTableData: [],
@@ -114,6 +117,9 @@ export default {
       }
     },
 
+    refreshChange(enable) {
+      this.manualStopSwitch = !enable
+    },
 
     tableCellClassName({row, column, rowIndex, columnIndex}) {
       //利用单元格的 className 的回调方法，给行列索引赋值
@@ -123,6 +129,15 @@ export default {
     maoTableClick(row, column) {
       if (1 === column.index) {
         this.$refs.maoTable.toggleRowExpansion(row)
+      }
+    },
+    maoTableExpand(row, expandedRows) {
+      if (expandedRows.length === 0) {
+        if (!this.manualStopSwitch) {
+          this.refreshSwitch = true
+        }
+      } else {
+        this.refreshSwitch = false
       }
     },
 
@@ -137,23 +152,26 @@ export default {
                 var attrs = [];
                 var subAttrs = [];
                 for (let k in data[i]) {
-                  var tmp;
                   if (k === "OtherData") {
                     var dataObj = JSON.parse(data[i][k])
-                    for (const subKey in dataObj) {
-                      subAttrs.push({
-                        "subAttrName": subKey,
-                        "subAttrValue": dataObj[subKey],
+                    if (Object.keys(dataObj).length > 0) {
+                      for (const subKey in dataObj) {
+                        subAttrs.push({
+                          "subAttrName": subKey,
+                          "subAttrValue": dataObj[subKey],
+                        });
+                      }
+                      attrs.push({
+                        "attrName": k,
+                        "attrValue": subAttrs,
                       });
                     }
-                    tmp = subAttrs
                   } else {
-                    tmp = data[i][k];
-                  }
-                  attrs.push({
+                    attrs.push({
                       "attrName": k,
-                      "attrValue": tmp,
-                  });
+                      "attrValue": data[i][k],
+                    });
+                  }
                 }
                 attrs = attrs.sort((a, b) => {
                   return a["attrName"] < b["attrName"] ? -1 : 1;
