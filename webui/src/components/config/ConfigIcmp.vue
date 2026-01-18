@@ -53,6 +53,8 @@
 </template>
 
 <script>
+import {ElMessage} from "element-plus";
+
 export default {
   name: "ConfigIcmp",
   data() {
@@ -122,9 +124,17 @@ export default {
               })
               .then(function () { // res
                 // setTimeout(vueThis.onLoad, 500)
+                ElMessage({
+                  message: 'ICMP检测提交成功',
+                  type: 'success',
+                })
                 vueThis.onLoad()
               })
               .catch(function (err) {
+                ElMessage({
+                  message: "ICMP检测提交失败：" + err,
+                  type: 'warning',
+                })
                 console.log("errMao: " + err);
               });
         }
@@ -149,9 +159,17 @@ export default {
           })
           .then(function () { // res
             // setTimeout(vueThis.onLoad, 500)
+            ElMessage({
+              message: 'ICMP检测删除成功',
+              type: 'success',
+            })
             vueThis.onLoad()
           })
           .catch(function (err) {
+            ElMessage({
+              message: "ICMP检测删除失败：" + err,
+              type: 'warning',
+            })
             console.log("errMao: " + err);
           });
     },

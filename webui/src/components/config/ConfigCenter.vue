@@ -2,7 +2,7 @@
   <div style="margin: 20px" />
   <el-form :model="form" label-width="120px" label-position="top" style="max-width: 600px">
     <el-form-item label="Security Key">
-      <el-input v-model="form.secKey" placeholder="*** ***"/>
+      <el-input v-model="form.secKey" show-password placeholder="*** ***"/>
     </el-form-item>
     <el-form-item>
       <el-button type="primary" @click="onSubmit">Submit</el-button>
@@ -13,6 +13,7 @@
 <script>
 
 import { reactive } from 'vue'
+import {ElMessage} from "element-plus";
 export default {
   name: "ConfigCenter",
 
@@ -31,6 +32,7 @@ export default {
   methods: {
 
     onLoad() {
+      this.form.secKey = ""
       // var vueThis = this;
       // this.$http.get("/api/getEmailInfo")
       //     .then(function (res) {
@@ -56,9 +58,17 @@ export default {
           })
           .then(function () { // res
             // setTimeout(vueThis.onLoad, 500)
+            ElMessage({
+              message: '密钥提交成功',
+              type: 'success',
+            })
             vueThis.onLoad()
           })
           .catch(function (err) {
+            ElMessage({
+              message: "密钥提交失败：" + err,
+              type: 'warning',
+            })
             console.log("errMao: " + err);
           });
     },

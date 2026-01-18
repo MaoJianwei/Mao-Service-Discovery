@@ -25,6 +25,7 @@
 <script>
 
 import { reactive } from 'vue'
+import {ElMessage} from "element-plus";
 export default {
   name: "ConfigMysql",
 
@@ -72,9 +73,17 @@ export default {
           })
           .then(function () { // res
             // setTimeout(vueThis.onLoad, 500)
+            ElMessage({
+              message: '数据库配置提交成功',
+              type: 'success',
+            })
             vueThis.onLoad()
           })
           .catch(function (err) {
+            ElMessage({
+              message: "数据库配置提交失败：" + err,
+              type: 'warning',
+            })
             console.log("errMao: " + err);
           });
     },

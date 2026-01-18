@@ -1,6 +1,6 @@
 <template>
   <div style="margin: 20px" />
-  <el-input v-model="maoConfigData" type="textarea" placeholder="Loading config data ..." autosize/>
+  <el-input v-model="maoConfigData" type="textarea" placeholder="Loading config data ..." :autosize="{ minRows: 0, maxRows: 36 }"/>
 </template>
 
 <script>
