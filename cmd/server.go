@@ -208,7 +208,14 @@ func RunServer(
 	report_server_addr *net.IP, report_server_port uint32, web_server_addr *net.IP, web_server_port uint32,
 	influxdbUrl string, influxdbToken string, influxdbOrgBucket string,
 	cli_dump_interval uint32, refresh_interval uint32, minLogLevel util.MaoLogLevel, silent bool,
-	disable_gateway_module bool, version string) {
+	disable_gateway_module bool,
+	disable_grpc_module bool,
+	disable_icmp_module bool,
+	disable_topology_module bool,
+	disable_email_module bool,
+	disable_mysql_module bool,
+	disable_wechat_module bool,
+	version string) {
 
 	util.InitMaoLog(minLogLevel)
 
@@ -235,55 +242,69 @@ func RunServer(
 	// =================================
 
 	// ====== gRPC KA module ======
-	grpcModule := &GrpcKa.GrpcDetectModule{}
-	grpcModule.InitGrpcModule(parent.GetAddrPort(report_server_addr, report_server_port))
+	if disable_grpc_module == false {
+		grpcModule := &GrpcKa.GrpcDetectModule{}
+		if !grpcModule.InitGrpcModule(parent.GetAddrPort(report_server_addr, report_server_port)) {
+			return
+		}
 
-	MaoCommon.RegisterService(MaoApi.GrpcKaModuleRegisterName, grpcModule)
+		MaoCommon.RegisterService(MaoApi.GrpcKaModuleRegisterName, grpcModule)
+	}
 	// ============================
 
 	// ====== ICMP KA module ======
-	icmpDetectModule := &icmpKa.IcmpDetectModule{}
-	if !icmpDetectModule.InitIcmpModule() {
-		return
-	}
+	if disable_icmp_module == false {
+		icmpDetectModule := &icmpKa.IcmpDetectModule{}
+		if !icmpDetectModule.InitIcmpModule() {
+			return
+		}
 
-	MaoCommon.RegisterService(MaoApi.IcmpKaModuleRegisterName, icmpDetectModule)
+		MaoCommon.RegisterService(MaoApi.IcmpKaModuleRegisterName, icmpDetectModule)
+	}
 	// ============================
 
 	// ====== SMTP Email module ======
-	smtpEmailModule := &Email.SmtpEmailModule{}
-	if !smtpEmailModule.InitSmtpEmailModule() {
-		return
-	}
+	if disable_email_module == false {
+		smtpEmailModule := &Email.SmtpEmailModule{}
+		if !smtpEmailModule.InitSmtpEmailModule() {
+			return
+		}
 
-	MaoCommon.RegisterService(MaoApi.EmailModuleRegisterName, smtpEmailModule)
+		MaoCommon.RegisterService(MaoApi.EmailModuleRegisterName, smtpEmailModule)
+	}
 	// ============================
 
 	// ====== MYSQL SYNC module ======
-	mysqlSyncModule := &MaoDatabase.MysqlDataPublisher{}
-	if !mysqlSyncModule.InitMysqlDataPublisher() {
-		return
+	if disable_mysql_module == false {
+		mysqlSyncModule := &MaoDatabase.MysqlDataPublisher{}
+		if !mysqlSyncModule.InitMysqlDataPublisher() {
+			return
+		}
 	}
 	// ============================
 
 	// ====== Wechat Message module ======
-	//wechatMessageModule := &Wechat.WechatMessageModule{}
-	//if !wechatMessageModule.InitWechatMessageModule() {
-	//	return
-	//}
-	//
-	//MaoCommon.RegisterService(MaoApi.WechatModuleRegisterName, wechatMessageModule)
+	if disable_wechat_module == false {
+		//wechatMessageModule := &Wechat.WechatMessageModule{}
+		//if !wechatMessageModule.InitWechatMessageModule() {
+		//	return
+		//}
+		//
+		//MaoCommon.RegisterService(MaoApi.WechatModuleRegisterName, wechatMessageModule)
+	}
 	// ============================
 
 	// ====== Topology module ======
-	hostname, err := util.GetHostname()
-	if err != nil {
-		hostname = "Mao-Unknown"
-	}
-	onosTopoModule := &OnosTopoShow.OnosTopoModule{}
-	onosTopoModule.InitOnosTopoModule(hostname, version)
+	if disable_topology_module == false {
+		hostname, err := util.GetHostname()
+		if err != nil {
+			hostname = "Mao-Unknown"
+		}
+		onosTopoModule := &OnosTopoShow.OnosTopoModule{}
+		onosTopoModule.InitOnosTopoModule(hostname, version)
 
-	MaoCommon.RegisterService(MaoApi.TopoModuleRegisterName, onosTopoModule)
+		MaoCommon.RegisterService(MaoApi.TopoModuleRegisterName, onosTopoModule)
+	}
 	// =================================
 
 	// ====== MaoCloud Monitor Wrapper module ======

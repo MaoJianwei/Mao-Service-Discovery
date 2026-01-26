@@ -65,6 +65,14 @@ var (
 
 	envTempMonitor bool
 	envTempPersistent bool
+
+	// Module disable flags
+	disable_grpc_module bool
+	disable_icmp_module bool
+	disable_topology_module bool
+	disable_email_module bool
+	disable_mysql_module bool
+	disable_wechat_module bool
 )
 
 var rootCmd = &cobra.Command{
@@ -137,7 +145,14 @@ var serverCmd = &cobra.Command{
 		branch.RunServer(&report_server_addr, report_server_port, &web_server_addr, web_server_port,
 			influxdbUrl, influxdbToken, influxdbOrgBucket,
 			cli_dump_interval, refresh_interval, minLogLevel, silent,
-			disable_gateway_module, ROOT_VERSION)
+			disable_gateway_module,
+			disable_grpc_module,
+			disable_icmp_module,
+			disable_topology_module,
+			disable_email_module,
+			disable_mysql_module,
+			disable_wechat_module,
+			ROOT_VERSION)
 	},
 }
 
@@ -179,6 +194,14 @@ Client:
 
 	- enable_aux_env_temp_monitor : enable to monitor environment temperature
 	- enable_aux_env_temp_persistent : enable to upload environment temperature to Influxdb
+
+	- disable_gateway_module : disable all Gateway modules. (Optional) (default: false)
+	- disable_grpc_module : disable gRPC discovery module. (Optional) (default: false)
+	- disable_icmp_module : disable ICMP discovery module. (Optional) (default: false)
+	- disable_topology_module : disable topology display module. (Optional) (default: false)
+	- disable_email_module : disable email notification module. (Optional) (default: false)
+	- disable_mysql_module : disable MySQL sync module. (Optional) (default: false)
+	- disable_wechat_module : disable WeChat message module. (Optional) (default: false)
  */
 func init() {
 	rootCmd.PersistentFlags().String("report_server_addr","::","IP address for gRPC KA module. (e.g. 2001:db8::1)")
@@ -199,6 +222,14 @@ func init() {
 	serverCmd.Flags().String("influxdb_token","","Token string obtained from Influxdb. (Optional)")
 
 	serverCmd.Flags().Bool("disable_gateway_module",false,"Disable all Gateway modules. (Optional) (default: false)")
+
+	// Module disable flags
+	serverCmd.Flags().Bool("disable_grpc_module", false, "Disable gRPC discovery module. (Optional) (default: false)")
+	serverCmd.Flags().Bool("disable_icmp_module", false, "Disable ICMP discovery module. (Optional) (default: false)")
+	serverCmd.Flags().Bool("disable_topology_module", false, "Disable topology display module. (Optional) (default: false)")
+	serverCmd.Flags().Bool("disable_email_module", false, "Disable email notification module. (Optional) (default: false)")
+	serverCmd.Flags().Bool("disable_mysql_module", false, "Disable MySQL sync module. (Optional) (default: false)")
+	serverCmd.Flags().Bool("disable_wechat_module", false, "Disable WeChat message module. (Optional) (default: false)")
 
 
 	generalClientCmd.Flags().Uint32("report_interval", 1000, "The interval to collect data and report to server, in milliseconds.")
@@ -326,6 +357,37 @@ func readServerArgs(cmd *cobra.Command) error {
 	}
 
 	disable_gateway_module, err = cmd.Flags().GetBool("disable_gateway_module")
+	if err != nil {
+		return err
+	}
+
+	// Read module disable flags
+	disable_grpc_module, err = cmd.Flags().GetBool("disable_grpc_module")
+	if err != nil {
+		return err
+	}
+
+	disable_icmp_module, err = cmd.Flags().GetBool("disable_icmp_module")
+	if err != nil {
+		return err
+	}
+
+	disable_topology_module, err = cmd.Flags().GetBool("disable_topology_module")
+	if err != nil {
+		return err
+	}
+
+	disable_email_module, err = cmd.Flags().GetBool("disable_email_module")
+	if err != nil {
+		return err
+	}
+
+	disable_mysql_module, err = cmd.Flags().GetBool("disable_mysql_module")
+	if err != nil {
+		return err
+	}
+
+	disable_wechat_module, err = cmd.Flags().GetBool("disable_wechat_module")
 	if err != nil {
 		return err
 	}
