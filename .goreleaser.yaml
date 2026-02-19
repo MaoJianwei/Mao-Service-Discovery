@@ -23,7 +23,7 @@ builds:
       - s390x
       - mips64
       - arm
-    main: ./cmd/picoclaw
+    main: ./
     ignore:
       - goos: windows
         goarch: arm
