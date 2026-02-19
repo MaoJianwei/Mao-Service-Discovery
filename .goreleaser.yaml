@@ -34,7 +34,6 @@ builds:
       - mips
       - loong64
       - arm
-      - armv6
     main: ./
     ignore:
       - goos: windows
