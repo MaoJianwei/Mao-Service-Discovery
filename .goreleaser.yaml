@@ -36,8 +36,6 @@ builds:
       - arm
     main: ./
     ignore:
-      - goos: windows
-        goarch: arm
       - goos: openbsd
         goarch: riscv64
 
