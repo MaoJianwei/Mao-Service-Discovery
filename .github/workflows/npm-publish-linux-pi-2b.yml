@@ -6,21 +6,25 @@ name: Node.js Package Publish (Commit) (Linux-Raspberry-Pi-arm)
 on:
   push:
     branches: [ "*" ]
-    # Build semver tags as releases.
-    tags: [ '*.*' ]
   workflow_dispatch:
 
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
 jobs:
-  build-golang:
-    runs-on: PI-2B
+  publish-npm:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Mao: using the go toolchain deployed in the exist env, Raspberry PI 2B.
-      # - name: Set up Go
-      #   uses: actions/setup-go@v3
-      #   with:
-      #     go-version: '1.21.6'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          registry-url: https://registry.npmjs.org/
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
           
       - name: Golang Build
         run: ./statically_linked_compilation.sh
@@ -28,15 +32,6 @@ jobs:
       - name: Golang Test
         run: go test -v ./...
         
-  build-npm:
-    runs-on: PI-2B
-    needs: build-golang
-    steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          registry-url: https://registry.npmjs.org/
-
       - run: ./build_webui.sh
       
       - name: Run Check Version
@@ -45,26 +40,77 @@ jobs:
       - run: mv ./MaoServerDiscovery ./.npm-release-binary/
       - run: cp -vrf ./resource/ ./.npm-release-binary/
       
-  publish-npm:
-    runs-on: PI-2B
-    needs: build-npm
-    steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          registry-url: https://registry.npmjs.org/
-      
       - run: git config --global user.email "maojianwei2016@126.com"
       - run: git config --global user.name "Jianwei Mao"
       
       - name: Refresh version for NPM Package
         working-directory: ./.npm-release-binary/
-        run: npm version prerelease --preid Raspberry-Pi-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
-        
+        run: npm version prerelease --preid RaspberryPi-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
       - name: Publish NPM Package
         working-directory: ./.npm-release-binary/
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
+        run: npm publish --tag latest
+
+        
+  # build-golang:
+  #   runs-on: PI-2B
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     # Mao: using the go toolchain deployed in the exist env, Raspberry PI 2B.
+  #     # - name: Set up Go
+  #     #   uses: actions/setup-go@v3
+  #     #   with:
+  #     #     go-version: '1.21.6'
+          
+  #     - name: Golang Build
+  #       run: ./statically_linked_compilation.sh
+        
+  #     - name: Golang Test
+  #       run: go test -v ./...
+        
+  # build-npm:
+  #   runs-on: PI-2B
+  #   needs: build-golang
+  #   steps:
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 18
+  #         registry-url: https://registry.npmjs.org/
+
+  #     - run: ./build_webui.sh
+      
+  #     - name: Run Check Version
+  #       run: ./MaoServerDiscovery -v
+        
+  #     - run: mv ./MaoServerDiscovery ./.npm-release-binary/
+  #     - run: cp -vrf ./resource/ ./.npm-release-binary/
+      
+  # publish-npm:
+  #   runs-on: PI-2B
+  #   needs: build-npm
+  #   steps:
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 18
+  #         registry-url: https://registry.npmjs.org/
+      
+  #     - run: git config --global user.email "maojianwei2016@126.com"
+  #     - run: git config --global user.name "Jianwei Mao"
+      
+  #     - name: Refresh version for NPM Package
+  #       working-directory: ./.npm-release-binary/
+  #       run: npm version prerelease --preid Raspberry-Pi-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
+        
+  #     - name: Publish NPM Package
+  #       working-directory: ./.npm-release-binary/
+  #       run: npm publish
+  #       env:
+  #         NODE_AUTH_TOKEN: ${{secrets.npm_token}}
 
 # commit-`date "+%Y-%m-%d-%H-%M-%S"`
