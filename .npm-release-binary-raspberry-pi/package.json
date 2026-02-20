@@ -1,0 +1,34 @@
+{
+  "name": "mao-service-discovery-raspberry-pi",
+  "version": "1.6.8",
+  "description": "Discover your services by using gRPC stream, ICMP or etcd. Come with WebGUI, Restful API and Config Persistence ability.",
+  "main": "MaoServiceDiscovery",
+  "scripts": {
+    "test": "go test -v"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MaoJianwei/Mao-Service-Discovery"
+  },
+  "keywords": [
+    "utils",
+    "microservices",
+    "service-discovery",
+    "monitor",
+    "system-monitor",
+    "icmp",
+    "grpc",
+    "etcd",
+    "grpc-go",
+    "etcdv3",
+    "icmpv6",
+    "icmp-ping",
+    "grpc-ping"
+  ],
+  "author": "Jianwei Mao",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/MaoJianwei/Mao-Service-Discovery/issues"
+  },
+  "homepage": "https://github.com/MaoJianwei/Mao-Service-Discovery"
+}
