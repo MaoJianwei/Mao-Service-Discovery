@@ -53,14 +53,14 @@ jobs:
       - name: Run Check Version
         run: ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery -v
         
-      - run: mv ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery ./.npm-release-binary/
-      - run: cp -vrf ./resource/ ./.npm-release-binary/
+      - run: cp -vf ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery ./.npm-release-binary-raspberry-pi/
+      - run: cp -vrf ./resource/ ./.npm-release-binary-raspberry-pi/
       
       - run: git config --global user.email "maojianwei2016@126.com"
       - run: git config --global user.name "Jianwei Mao"
       
       - name: Refresh version for NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-raspberry-pi/
         run: npm version prerelease --preid RaspberryPi-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
 
       - uses: actions/setup-node@v4
@@ -69,7 +69,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-raspberry-pi/
         run: npm publish --tag latest
 
         
