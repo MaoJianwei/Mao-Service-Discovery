@@ -15,7 +15,7 @@ builds:
       - stdjson
     ldflags:
       - -extldflags '-static'
-      - -X main.GIT_VERSION={{ .GITHUB_REF_NAME }}-{{ .GITHUB_SHA }}
+      - -X main.GIT_VERSION={{ .Version }}-{{ .Commit }}
     goos:
       - linux
       - windows
