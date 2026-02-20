@@ -15,7 +15,7 @@ builds:
       - stdjson
     ldflags:
       - -extldflags '-static'
-      - -X main.GIT_VERSION={{ .Version }}-{{ .Commit }}
+      - -X main.GIT_VERSION={{ .Branch }}-{{ .Commit }}
     goos:
       - linux
     goarch:
