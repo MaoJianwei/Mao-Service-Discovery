@@ -29,8 +29,8 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         
-      - run: ls -al
-      - run: find
+      # - run: ls -al
+      # - run: find
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -39,8 +39,8 @@ jobs:
           args: release --snapshot --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: ls -al
-      - run: find
+      # - run: ls -al
+      # - run: find
       
       - name: Run Check Version
         run: ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery -v
@@ -51,9 +51,8 @@ jobs:
         run: go test -v ./...
         
       - run: ./build_webui.sh
-      
 
-        
+
       - run: cp -vf ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery ./.npm-release-binary-raspberry-pi/
       - run: cp -vrf ./resource/ ./.npm-release-binary-raspberry-pi/
       
