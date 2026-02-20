@@ -18,21 +18,7 @@ builds:
       - -X main.GIT_VERSION={{ .Version }}-{{ .Commit }}
     goos:
       - linux
-      - windows
-      - darwin
-      - freebsd
-      - openbsd
-      - netbsd
     goarch:
-      - amd64
-      - arm64
-      - riscv64
-      - s390x
-      - mips64
-      - mips64le
-      - mipsle
-      - mips
-      - loong64
       - arm
     main: ./
     ignore:
