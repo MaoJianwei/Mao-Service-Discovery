@@ -51,9 +51,9 @@ jobs:
       - run: ./build_webui.sh
       
       - name: Run Check Version
-        run: ./MaoServerDiscovery -v
+        run: ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery -v
         
-      - run: mv ./MaoServerDiscovery ./.npm-release-binary/
+      - run: mv ./dist/mao-service-discovery_linux_arm_6/Mao-Service-Discovery ./.npm-release-binary/
       - run: cp -vrf ./resource/ ./.npm-release-binary/
       
       - run: git config --global user.email "maojianwei2016@126.com"
