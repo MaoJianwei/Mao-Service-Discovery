@@ -19,11 +19,12 @@ on:
         default: false
 
 jobs:
-  create-tag:
-    name: Create Git Tag
+  release:
+    name: Create Git Tag and GoReleaser
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,14 +41,6 @@ jobs:
           git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
           git push origin "$RELEASE_TAG"
 
-  release:
-    name: GoReleaser Release
-    needs: create-tag
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
       - name: Checkout tag
         uses: actions/checkout@v4
         with:
