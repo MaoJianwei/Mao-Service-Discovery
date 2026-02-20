@@ -25,7 +25,21 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-          
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        
+      - run: ls -al
+      - run: find
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: ~> v2
+          args: release --clean
+      - run: ls -al
+      - run: find
+
       - name: Golang Build
         run: ./statically_linked_compilation.sh
         
