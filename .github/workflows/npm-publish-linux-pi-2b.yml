@@ -42,9 +42,8 @@ jobs:
       - run: ls -al
       - run: find
 
-      - name: Golang Build
-        run: ./statically_linked_compilation.sh
-        
+      # - name: Golang Build
+      #   run: ./statically_linked_compilation.sh
       - name: Golang Test
         run: go test -v ./...
         
