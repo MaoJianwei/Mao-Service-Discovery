@@ -1,6 +1,7 @@
 # Mao Service Discovery
 |Category|Job|
 |---|---|
+|Wiki|[![zread.ai AI Wiki)](https://img.shields.io/badge/zread_AI_Wiki-Mao_Service_Discovery-blue)](https://zread.ai/MaoJianwei/Mao-Service-Discovery)|
 |Build|[![Go (Linux/Win/MacOS)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/go_all.yml/badge.svg)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/go_all.yml) [![Go Static (Linux/Win/MacOS)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/go_all_static.yml/badge.svg)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/go_all_static.yml) [![vue3 Node.js](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/vue3-nodejs.yml/badge.svg)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/vue3-nodejs.yml)|
 |Test|[![CodeQL](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/codeql-analysis.yml) [![Docker Image CI](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/docker-image.yml/badge.svg)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/docker-image.yml) |
 |Analyze|[![Analyze Dependency Relationships Map](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/analyze_dependency_map.yml/badge.svg)](https://github.com/MaoJianwei/Mao_Service_Discovery/actions/workflows/analyze_dependency_map.yml)|
