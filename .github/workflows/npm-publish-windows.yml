@@ -4,6 +4,7 @@
 name: Node.js Package Publish (Commit) (Windows)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "*" ]
 

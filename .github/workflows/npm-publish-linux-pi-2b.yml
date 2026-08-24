@@ -4,9 +4,9 @@
 name: Node.js Package Publish (Commit) (Linux-Raspberry-Pi-arm)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "*" ]
-  workflow_dispatch:
 
 permissions:
   id-token: write  # Required for OIDC

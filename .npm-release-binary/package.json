@@ -1,6 +1,6 @@
 {
   "name": "mao-service-discovery",
-  "version": "1.6.8",
+  "version": "2.0.0",
   "description": "Discover your services by using gRPC stream, ICMP or etcd. Come with WebGUI, Restful API and Config Persistence ability.",
   "main": "MaoServiceDiscovery",
   "scripts": {

@@ -4,8 +4,11 @@
 name: Node.js Package Publish (Commit) (Linux)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "*" ]
+  release:
+    types: [created]
 
 permissions:
   id-token: write  # Required for OIDC
@@ -14,6 +17,7 @@ permissions:
 jobs:
   publish-npm:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,14 +40,14 @@ jobs:
       - name: Run Check Version
         run: ./MaoServerDiscovery -v
         
-      - run: mv ./MaoServerDiscovery ./.npm-release-binary/
-      - run: cp -vrf ./resource/ ./.npm-release-binary/
+      - run: mv ./MaoServerDiscovery ./.npm-release-binary-linux/
+      - run: cp -vrf ./resource/ ./.npm-release-binary-linux/
       
       - run: git config --global user.email "maojianwei2016@126.com"
       - run: git config --global user.name "Jianwei Mao"
       
       - name: Refresh version for NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-linux/
         run: npm version prerelease --preid linux-rc1-$GITHUB_REF_NAME-$GITHUB_SHA
 
       - uses: actions/setup-node@v4
@@ -52,7 +56,47 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish NPM Package
-        working-directory: ./.npm-release-binary/
+        working-directory: ./.npm-release-binary-linux/
         run: npm publish --tag latest
+
+  release-npm:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          registry-url: https://registry.npmjs.org/
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          
+      - name: Golang Build
+        run: ./statically_linked_compilation.sh
+        
+      - name: Golang Test
+        run: go test -v ./...
+
+      - run: ./build_webui.sh
+
+      - name: Run Check Version
+        run: ./MaoServerDiscovery -v
+      
+      - run: mv ./MaoServerDiscovery ./.npm-release-binary/
+      - run: cp -vrf ./resource/ ./.npm-release-binary/
+      
+      - run: git config --global user.email "maojianwei2016@126.com"
+      - run: git config --global user.name "Jianwei Mao"
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish NPM Package
+        working-directory: ./.npm-release-binary/
+        run: npm publish
 
 # commit-`date "+%Y-%m-%d-%H-%M-%S"`
