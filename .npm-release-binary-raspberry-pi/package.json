@@ -1,6 +1,6 @@
 {
   "name": "mao-service-discovery-raspberry-pi",
-  "version": "1.9.9",
+  "version": "2.1.0",
   "description": "Discover your services by using gRPC stream, ICMP or etcd. Come with WebGUI, Restful API and Config Persistence ability.",
   "main": "MaoServiceDiscovery",
   "scripts": {
