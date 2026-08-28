@@ -1,11 +1,11 @@
 module MaoServerDiscovery
 
-go 1.20
+go 1.21.0
 
 require (
 	github.com/MaoJianwei/gmsm v1.5.0
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-sql-driver/mysql v1.7.1
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/influxdata/influxdb-client-go/v2 v2.5.1
 	github.com/spf13/cobra v1.7.0
 	golang.org/x/net v0.10.0
@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
